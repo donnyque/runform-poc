@@ -30,6 +30,12 @@ export type ViewMode = 'live' | 'summary' | 'history'
 
 const METRICS_UPDATE_INTERVAL_MS = 500
 
+const RELIABILITY_LABEL: Record<'High' | 'Medium' | 'Low', string> = {
+  High: 'Høj',
+  Medium: 'Mellem',
+  Low: 'Lav',
+}
+
 const ONBOARDING_STORAGE_KEY = 'runform-poc-onboarding-seen'
 const MESSAGE_THROTTLE_MS = 2000
 const CALIBRATION_DURATION_MS = 5000
@@ -127,6 +133,7 @@ function App() {
   const [summaryNote, setSummaryNote] = useState('')
   const [sessions, setSessions] = useState<SessionSummary[]>(() => loadSessions())
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
+  const [activeTooltipId, setActiveTooltipId] = useState<string | null>(null)
 
   useEffect(() => {
     phaseRef.current = phase
@@ -554,7 +561,7 @@ function App() {
     const lines = [
       `Session: ${formatDate(s.dateISO)}`,
       `Total tid: ${formatD(total)} · Aktiv tid: ${formatD(active)}`,
-      `Cadence: ${s.cadenceAvg} spm · Stability: ${s.stabilityStdDev} · VO proxy: ${s.voMedian.toFixed(3)} · Pålidelighed: ${s.reliability}`,
+      `Kadence: ${s.cadenceAvg} spm · Stabilitet: ${s.stabilityStdDev} · VO proxy: ${s.voMedian.toFixed(3)} · Pålidelighed: ${RELIABILITY_LABEL[s.reliability]}`,
       'Indsigt:',
       ...s.insights.map((line) => `  · ${line}`),
     ]
@@ -695,7 +702,7 @@ function App() {
                 >
                   <span className="history-item-date">{formatSessionDate(s.dateISO)}</span>
                   <span className="history-item-meta">
-                    {formatDuration(s.totalDurationSec ?? s.durationSec)} · {s.cadenceAvg} spm · {s.reliability}
+                    {formatDuration(s.totalDurationSec ?? s.durationSec)} · {s.cadenceAvg} spm · {RELIABILITY_LABEL[s.reliability]}
                   </span>
                 </button>
                 <button
@@ -735,15 +742,57 @@ function App() {
               )}
             </div>
             <h2 className="summary-section-title">Nøgletal</h2>
-            <div className="summary-stats">
-              <span>Cadence: {displayedSummary.cadenceAvg} spm</span>
-              <span>Stability: {displayedSummary.stabilityStdDev} spm</span>
-              <span>VO proxy: {displayedSummary.voMedian.toFixed(3)} rel</span>
-              <span>Pålidelighed: {displayedSummary.reliability}</span>
+            <div className="summary-stats summary-stats-with-tooltips">
+              <span>Kadence (spm): {displayedSummary.cadenceAvg}</span>
+              <span className="stat-with-info">
+                Stabilitet (spm): {displayedSummary.stabilityStdDev}
+                <button
+                  type="button"
+                  className="info-icon"
+                  aria-label="Forklaring"
+                  title="Måler hvor meget kadencen svinger. Lavere = mere stabil."
+                  onClick={(e) => { e.preventDefault(); setActiveTooltipId(activeTooltipId === 'stability' ? null : 'stability'); }}
+                >
+                  <span aria-hidden>ⓘ</span>
+                </button>
+                {activeTooltipId === 'stability' && (
+                  <span className="tooltip-bubble" role="tooltip">Måler hvor meget kadencen svinger. Lavere = mere stabil.</span>
+                )}
+              </span>
+              <span className="stat-with-info">
+                VO proxy (relativ): {displayedSummary.voMedian.toFixed(3)}
+                <button
+                  type="button"
+                  className="info-icon"
+                  aria-label="Forklaring"
+                  title="Relativ måling baseret på video. Ikke cm. Lavere = mindre hop."
+                  onClick={(e) => { e.preventDefault(); setActiveTooltipId(activeTooltipId === 'vo' ? null : 'vo'); }}
+                >
+                  <span aria-hidden>ⓘ</span>
+                </button>
+                {activeTooltipId === 'vo' && (
+                  <span className="tooltip-bubble" role="tooltip">Relativ måling baseret på video. Ikke cm. Lavere = mindre hop.</span>
+                )}
+              </span>
+              <span className="stat-with-info">
+                Pålidelighed: {RELIABILITY_LABEL[displayedSummary.reliability]}
+                <button
+                  type="button"
+                  className="info-icon"
+                  aria-label="Forklaring"
+                  title="Baseret på lys og hvor godt kroppen var i billedet."
+                  onClick={(e) => { e.preventDefault(); setActiveTooltipId(activeTooltipId === 'reliability' ? null : 'reliability'); }}
+                >
+                  <span aria-hidden>ⓘ</span>
+                </button>
+                {activeTooltipId === 'reliability' && (
+                  <span className="tooltip-bubble" role="tooltip">Baseret på lys og hvor godt kroppen var i billedet.</span>
+                )}
+              </span>
             </div>
             <div className="summary-sparklines">
               <div className="sparkline-block">
-                <span className="sparkline-label">Cadence</span>
+                <span className="sparkline-label">Kadence</span>
                 <Sparkline
                   data={displayedSummary.cadenceSamples ?? []}
                   width={100}
@@ -752,7 +801,7 @@ function App() {
                 />
               </div>
               <div className="sparkline-block">
-                <span className="sparkline-label">Quality</span>
+                <span className="sparkline-label">Kvalitet</span>
                 <Sparkline
                   data={displayedSummary.qualitySamples ?? []}
                   width={100}
@@ -766,13 +815,13 @@ function App() {
                 <span className="summary-compare-title">Sammenlignet med forrige</span>
                 <div className="summary-compare-rows">
                   <span className="compare-row">
-                    Cadence {compareDeltas.cadence >= 0 ? '↑' : '↓'} {Math.abs(compareDeltas.cadence).toFixed(1)} spm
+                    Kadence {compareDeltas.cadence >= 0 ? '↑' : '↓'} {Math.abs(compareDeltas.cadence).toFixed(1)} spm
                   </span>
                   <span className="compare-row">
-                    Stability {compareDeltas.stability <= 0 ? '↓' : '↑'} {Math.abs(compareDeltas.stability).toFixed(1)}
+                    Stabilitet {compareDeltas.stability <= 0 ? '↓' : '↑'} {Math.abs(compareDeltas.stability).toFixed(1)}
                   </span>
                   <span className="compare-row">
-                    VO {compareDeltas.vo <= 0 ? '↓' : '↑'} {Math.abs(compareDeltas.vo).toFixed(3)}
+                    VO proxy {compareDeltas.vo <= 0 ? '↓' : '↑'} {Math.abs(compareDeltas.vo).toFixed(3)}
                   </span>
                 </div>
               </div>
@@ -784,7 +833,7 @@ function App() {
               ))}
             </ul>
             <p className="summary-disclaimer">
-              Prototype. Kun generel feedback. Ingen diagnoser.
+              Prototype til generel løbe-feedback. Ingen diagnoser.
             </p>
             <label className="summary-note-label">
               Note
@@ -812,7 +861,7 @@ function App() {
                 Ny session
               </button>
               <button type="button" className="btn btn-secondary" onClick={handleBackToLive}>
-                Tilbage til live
+                Tilbage
               </button>
             </div>
             </section>
@@ -824,7 +873,7 @@ function App() {
                   Ny session
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={handleBackToLive}>
-                  Tilbage til live
+                  Tilbage
                 </button>
               </div>
             </section>
@@ -842,7 +891,7 @@ function App() {
                   >
                     <span className="history-item-date">{formatSessionDate(s.dateISO)}</span>
                     <span className="history-item-meta">
-                      {formatDuration(s.totalDurationSec ?? s.durationSec)} · {s.cadenceAvg} spm · {s.reliability}
+                      {formatDuration(s.totalDurationSec ?? s.durationSec)} · {s.cadenceAvg} spm · {RELIABILITY_LABEL[s.reliability]}
                     </span>
                   </button>
                   <button
@@ -928,9 +977,9 @@ function App() {
                   : (lastGoodCadenceRef.current ?? metricsSnapshot?.cadence ?? '–')}
               </span>
               <span className="metric-label">
-                Cadence spm
+                Kadence (spm)
                 {(metricsSnapshot?.cadence ?? 0) > 0 && (metricsSnapshot?.cadence ?? 0) < 80 && (
-                  <span className="metric-low-confidence"> (low confidence)</span>
+                  <span className="metric-low-confidence"> (usikker)</span>
                 )}
               </span>
             </div>
@@ -1035,7 +1084,7 @@ function App() {
                 className="btn btn-stop"
                 onClick={handleStop}
               >
-                Stop Session
+                Stop og se resultat
               </button>
             </>
           )}
@@ -1046,14 +1095,14 @@ function App() {
                 className="btn btn-start"
                 onClick={handleResume}
               >
-                Resume
+                Fortsæt
               </button>
               <button
                 type="button"
                 className="btn btn-stop"
                 onClick={handleStop}
               >
-                Stop Session
+                Stop og se resultat
               </button>
             </>
           )}
@@ -1068,7 +1117,7 @@ function App() {
         >
           Vis opsætningsvejledning
         </button>
-        <p className="footer-disclaimer">Prototype. Kun generel feedback.</p>
+        <p className="footer-disclaimer">Prototype til generel løbe-feedback. Ingen diagnoser.</p>
       </footer>
     </div>
   )

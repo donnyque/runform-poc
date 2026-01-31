@@ -1,73 +1,46 @@
-# React + TypeScript + Vite
+# RunForm PoC
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+RunForm PoC er en mobil-web-app til løbeform-feedback på løbebånd. Appen bruger telefonens kamera og pose-estimering (MediaPipe) til at vise et skelet-overlay i realtid og beregne simple mål under løb. Målingerne er relative og vejledende – ikke medicinske.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **Pose-overlay** – Live skelet over video fra frontkamera
+- **Kalibrering** – Baseline-lås (5 sek) før tracking
+- **Metrics** – Kadence (spm), stabilitet, VO proxy (relativ), frame quality og pålidelighed
+- **Pause / Fortsæt** – Pause under session; total tid og aktiv tid vises
+- **Session summary** – Oversigt med nøgletal, indsigt, sparklines og sammenligning med forrige session
+- **Historik** – Seneste sessioner (max 30), åbn/slet
+- **Eksport** – Kopier summary som tekst eller download session som JSON
 
-## React Compiler
+## Sådan bruger du appen
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Åbn appen via **HTTPS** (påkrævet for kamera) på din telefon.
+2. **Placér telefonen** stabilt – gulv, skammel eller stativ – så hele kroppen er i billedet.
+3. Tryk **Start** og hold still under kalibreringen (5 sek).
+4. Når baseline er låst: **Løb** på løbebåndet. Du kan bruge **Pause** og **Fortsæt** undervejs.
+5. Tryk **Stop og se resultat** for at se summary med nøgletal og indsigt.
 
-## Expanding the ESLint configuration
+## Begrænsninger
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Målingerne er **relative** og afhænger af lys, vinkel og afstand.
+- Bedst resultat fås typisk med **kamera fra siden** (ikke direkte forfra).
+- Appen er **ikke til medicinsk brug** – kun til generel løbe-feedback.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Lokal udvikling
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Åbn den viste URL i browser (HTTPS på mobil kræver fx tunnel eller lokal netværks-URL).
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+Build til produktion:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build
 ```
+
+## License
+
+All rights reserved.

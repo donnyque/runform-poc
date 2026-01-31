@@ -121,35 +121,35 @@ export function generateInsights(
 
   if (s.reliability === 'Low') {
     lines.push(
-      'Målingen var lidt usikker. Næste gang: mere lys og hele kroppen i frame.'
+      'Prøv næste gang med mere lys og hele kroppen synlig i billedet.'
     )
   }
   if (s.stabilityStdDev <= 3 && s.cadenceAvg > 0) {
-    lines.push('Du holdt en meget jævn rytme.')
+    lines.push('Du holdt en jævn rytme.')
   }
   if (s.stabilityStdDev > 6 && s.cadenceAvg > 0) {
-    lines.push('Din rytme svingede en del. Prøv at finde en mere stabil cadence.')
+    lines.push('Du kan eksperimentere med en mere jævn kadence næste gang.')
   }
   if (s.cadenceAvg > 0 && s.cadenceAvg < 155) {
     lines.push(
-      'Du løb med relativt lav cadence. Du kan eksperimentere med lidt kortere skridt.'
+      'Du kan eksperimentere med lidt kortere skridt for at øge kadencen.'
     )
   }
   if (s.cadenceAvg > 175) {
     lines.push(
-      'Du løb med relativt høj cadence. Godt hvis det føles afslappet og stabilt.'
+      'Høj kadence – godt hvis det føles afslappet og stabilt.'
     )
   }
   const voP70 = voValues.length > 0 ? percentile(voValues, 70) : 0
   const voHigh = voValues.length > 0 && s.voMedian > voP70
   if (voHigh) {
     lines.push(
-      'Der var en del vertikal bevægelse. Prøv at holde overkroppen lidt mere rolig.'
+      'Prøv næste gang at holde overkroppen lidt mere rolig for mindre hop.'
     )
   }
   if ((lines.length === 0 || (lines.length < 4 && !voHigh)) && lines.length < 4) {
     lines.push(
-      'God base. Gem denne som reference og se om du kan gøre den endnu mere stabil næste gang.'
+      'God reference. Du kan sammenligne med næste session.'
     )
   }
 
