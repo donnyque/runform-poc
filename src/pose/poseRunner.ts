@@ -18,6 +18,7 @@ import {
   computeFrameQuality,
   getCalibrationFrameData,
   getFrameQualityHint,
+  getTrackingFrameData,
   type FrameQualityHint,
 } from './frameQuality';
 
@@ -29,6 +30,14 @@ export type CalibrationFramePayload = {
   isGood: boolean;
 };
 
+export type TrackingFramePayload = {
+  ankleY: number;
+  ankleUsed: 'L' | 'R';
+  midHipY: number;
+};
+
+const TRACKING_FRAME_THROTTLE_MS = 34;
+
 export type PoseRunnerCallbacks = {
   onStatus: (
     fps: number,
@@ -37,6 +46,7 @@ export type PoseRunnerCallbacks = {
     hint: FrameQualityHint | null
   ) => void;
   onCalibrationFrame?: (data: CalibrationFramePayload, timestampMs: number) => void;
+  onTrackingFrame?: (data: TrackingFramePayload, timestampMs: number) => void;
   onError: (message: string) => void;
 };
 
@@ -49,6 +59,7 @@ let lastFps = 0;
 let lastPoseDetected = false;
 let lastFrameQuality: number | null = null;
 let lastHint: FrameQualityHint | null = null;
+let lastTrackingFrameTime = 0;
 
 function getLocateFile(): (path: string, prefix?: string) => string {
   return (path: string) => {
@@ -123,6 +134,27 @@ export async function startPoseRunner(
             },
             performance.now()
           );
+        }
+        if (
+          callbacks.onTrackingFrame &&
+          lastFrameQuality != null &&
+          lastFrameQuality >= 55
+        ) {
+          const now = performance.now();
+          if (now - lastTrackingFrameTime >= TRACKING_FRAME_THROTTLE_MS) {
+            lastTrackingFrameTime = now;
+            const track = getTrackingFrameData(results, lastFrameQuality);
+            if (track) {
+              callbacks.onTrackingFrame(
+                {
+                  ankleY: track.ankleY,
+                  ankleUsed: track.ankleUsed,
+                  midHipY: track.midHipY,
+                },
+                now
+              );
+            }
+          }
         }
       } else {
         lastFrameQuality = null;

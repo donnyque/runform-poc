@@ -165,3 +165,49 @@ export function getCalibrationFrameData(
 
   return { midHipY, midShoulderY, isGood };
 }
+
+const METRICS_MIN_FRAME_QUALITY = 55;
+
+/**
+ * Tracking frame for metrics: best ankle Y, which ankle, mid hip Y.
+ * Only when pose + frameQuality >= 55.
+ * Best ankle = higher visibility of left vs right.
+ */
+export type TrackingFrameData = {
+  ankleY: number;
+  ankleUsed: 'L' | 'R';
+  midHipY: number;
+} | null;
+
+export function getTrackingFrameData(
+  results: Results,
+  frameQuality: number
+): TrackingFrameData {
+  const landmarks = results.poseLandmarks;
+  if (!landmarks?.length || frameQuality < METRICS_MIN_FRAME_QUALITY) {
+    return null;
+  }
+
+  const leftAnkleVis = getVisibility(landmarks, POSE_LANDMARKS_LEFT.LEFT_ANKLE);
+  const rightAnkleVis = getVisibility(landmarks, POSE_LANDMARKS_RIGHT.RIGHT_ANKLE);
+  const useLeft = leftAnkleVis > rightAnkleVis;
+
+  const ankleIndex = useLeft
+    ? POSE_LANDMARKS_LEFT.LEFT_ANKLE
+    : POSE_LANDMARKS_RIGHT.RIGHT_ANKLE;
+  const ankle = landmarks[ankleIndex];
+  if (ankle == null) return null;
+
+  const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
+  const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
+  const midHipY =
+    leftHip != null && rightHip != null
+      ? (leftHip.y + rightHip.y) / 2
+      : 0;
+
+  return {
+    ankleY: ankle.y,
+    ankleUsed: useLeft ? 'L' : 'R',
+    midHipY,
+  };
+}

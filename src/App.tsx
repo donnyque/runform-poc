@@ -4,7 +4,10 @@ import {
   stopPoseRunner,
 } from './pose/poseRunner'
 import type { FrameQualityHint } from './pose/frameQuality'
+import { MetricsSession, type MetricsSnapshot } from './pose/metrics'
 import './App.css'
+
+const METRICS_UPDATE_INTERVAL_MS = 500
 
 const ONBOARDING_STORAGE_KEY = 'runform-poc-onboarding-seen'
 const MESSAGE_THROTTLE_MS = 2000
@@ -67,6 +70,9 @@ function App() {
   const samplesMidShoulderYRef = useRef<number[]>([])
   const lastGoodTimeStateUpdateRef = useRef<number>(0)
   const calibrationGoodFrameRef = useRef<boolean>(false)
+  const baselineRef = useRef<Baseline | null>(null)
+  const metricsSessionRef = useRef<MetricsSession | null>(null)
+  const trackingStartTimeRef = useRef<number>(0)
 
   const [isRunning, setIsRunning] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
@@ -80,10 +86,17 @@ function App() {
   const [goodTimeMs, setGoodTimeMs] = useState(0)
   const [calibrationGoodFrame, setCalibrationGoodFrame] = useState(false)
   const [baseline, setBaseline] = useState<Baseline | null>(null)
+  const [metricsSnapshot, setMetricsSnapshot] = useState<MetricsSnapshot | null>(null)
+  const [trackingTimeMs, setTrackingTimeMs] = useState(0)
+  const [debugMetricsOpen, setDebugMetricsOpen] = useState(false)
 
   useEffect(() => {
     phaseRef.current = phase
   }, [phase])
+
+  useEffect(() => {
+    baselineRef.current = baseline
+  }, [baseline])
 
   const updateHintMessage = useCallback(
     (desired: string | null, now: number) => {
@@ -155,8 +168,12 @@ function App() {
       if (goodTimeAccumulatedRef.current >= CALIBRATION_DURATION_MS) {
         const hipY = mean(samplesMidHipYRef.current)
         const torsoY = mean(samplesMidShoulderYRef.current)
-        setBaseline({ hipY, torsoY })
+        const bl = { hipY, torsoY }
+        setBaseline(bl)
+        baselineRef.current = bl
         setGoodTimeMs(CALIBRATION_DURATION_MS)
+        metricsSessionRef.current = new MetricsSession()
+        trackingStartTimeRef.current = performance.now()
         setPhase('tracking')
         phaseRef.current = 'tracking'
         goodTimeAccumulatedRef.current = 0
@@ -164,6 +181,25 @@ function App() {
         samplesMidHipYRef.current = []
         samplesMidShoulderYRef.current = []
       }
+    },
+    []
+  )
+
+  const handleTrackingFrame = useCallback(
+    (
+      data: { ankleY: number; ankleUsed: 'L' | 'R'; midHipY: number },
+      timestampMs: number
+    ) => {
+      if (phaseRef.current !== 'tracking') return
+      const bl = baselineRef.current
+      if (!bl) return
+      metricsSessionRef.current?.update(
+        data.ankleY,
+        data.ankleUsed,
+        data.midHipY,
+        bl.hipY,
+        timestampMs
+      )
     },
     []
   )
@@ -201,6 +237,7 @@ function App() {
         setHint(h ?? null)
       },
       onCalibrationFrame: handleCalibrationFrame,
+      onTrackingFrame: handleTrackingFrame,
       onError: (msg) => {
         setError(msg)
         setIsRunning(false)
@@ -208,7 +245,7 @@ function App() {
         phaseRef.current = 'idle'
       },
     })
-  }, [handleCalibrationFrame])
+  }, [handleCalibrationFrame, handleTrackingFrame])
 
   const handleStop = useCallback(async () => {
     await stopPoseRunner()
@@ -223,6 +260,10 @@ function App() {
     setHintMessage(null)
     setGoodTimeMs(0)
     setBaseline(null)
+    baselineRef.current = null
+    setMetricsSnapshot(null)
+    setTrackingTimeMs(0)
+    metricsSessionRef.current = null
     displayedMessageRef.current = null
   }, [])
 
@@ -237,7 +278,23 @@ function App() {
     samplesMidHipYRef.current = []
     samplesMidShoulderYRef.current = []
     lastGoodTimeStateUpdateRef.current = 0
+    metricsSessionRef.current = null
+    setMetricsSnapshot(null)
+    setTrackingTimeMs(0)
   }, [])
+
+  useEffect(() => {
+    if (phase !== 'tracking' || !metricsSessionRef.current) return
+    const interval = setInterval(() => {
+      const now = performance.now()
+      const session = metricsSessionRef.current
+      if (session) {
+        setMetricsSnapshot(session.getSnapshot(now))
+      }
+      setTrackingTimeMs(Math.max(0, now - trackingStartTimeRef.current))
+    }, METRICS_UPDATE_INTERVAL_MS)
+    return () => clearInterval(interval)
+  }, [phase])
 
   const closeOnboardingAndStart = useCallback(() => {
     setOnboardingSeen()
@@ -254,6 +311,10 @@ function App() {
     5 - Math.floor(goodTimeMs / 1000)
   )
   const calibrationProgress = goodTimeMs / CALIBRATION_DURATION_MS
+
+  const trackingMm = Math.floor(trackingTimeMs / 60_000)
+  const trackingSs = Math.floor((trackingTimeMs % 60_000) / 1000)
+  const trackingTimeLabel = `${String(trackingMm).padStart(2, '0')}:${String(trackingSs).padStart(2, '0')}`
 
   return (
     <div className="app" ref={containerRef}>
@@ -316,15 +377,55 @@ function App() {
       )}
 
       {phase === 'tracking' && (
-        <div className="baseline-locked" role="status">
-          <span className="baseline-locked-label">Baseline locked</span>
-          {baseline != null && (
-            <div className="debug-panel">
-              <span>hipY: {baseline.hipY.toFixed(3)}</span>
-              <span>torsoY: {baseline.torsoY.toFixed(3)}</span>
+        <>
+          <div className="baseline-locked" role="status">
+            <span className="baseline-locked-label">Baseline locked</span>
+            {baseline != null && (
+              <div className="debug-panel">
+                <span>hipY: {baseline.hipY.toFixed(3)}</span>
+                <span>torsoY: {baseline.torsoY.toFixed(3)}</span>
+              </div>
+            )}
+          </div>
+          <div className="metrics-panel" role="region" aria-label="Målinger">
+            <div className="metrics-row">
+              <div className="metric-block">
+                <span className="metric-value">{metricsSnapshot?.cadence ?? '–'}</span>
+                <span className="metric-unit">spm</span>
+                <span className="metric-label">Cadence</span>
+              </div>
+              <div className="metric-block">
+                <span className="metric-value">{metricsSnapshot != null ? metricsSnapshot.voProxy.toFixed(3) : '–'}</span>
+                <span className="metric-unit">rel</span>
+                <span className="metric-label">VO proxy</span>
+              </div>
+              <div className="metric-block">
+                <span className="metric-value">{metricsSnapshot?.stability ?? '–'}</span>
+                <span className="metric-unit">spm</span>
+                <span className="metric-label">Stability</span>
+              </div>
             </div>
-          )}
-        </div>
+            <div className="metrics-tracking-time">
+              <span className="metric-label">Tracking</span>
+              <span className="metric-value">{trackingTimeLabel}</span>
+            </div>
+            <button
+              type="button"
+              className="debug-toggle"
+              onClick={() => setDebugMetricsOpen((o) => !o)}
+              aria-expanded={debugMetricsOpen}
+            >
+              {debugMetricsOpen ? 'Skjul debug' : 'Vis debug'}
+            </button>
+            {debugMetricsOpen && metricsSnapshot != null && (
+              <div className="metrics-debug">
+                <span>steps_last_10s: {metricsSnapshot.stepsLast10s}</span>
+                <span>ankle: {metricsSnapshot.currentAnkle === 'L' ? 'L' : 'R'}</span>
+              </div>
+            )}
+            <p className="metrics-disclaimer">Prototype. Kun generel feedback.</p>
+          </div>
+        </>
       )}
 
       <div className="preview-wrapper">
