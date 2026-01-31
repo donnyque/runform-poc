@@ -197,3 +197,24 @@ export function deleteSession(id: string): void {
   const sessions = loadSessions().filter((s) => s.id !== id)
   saveSessions(sessions)
 }
+
+/** Fallback summary when Stop is pressed but no tracking samples (e.g. stopped right after calibrating). */
+export function createEmptySummary(): SessionSummary {
+  const dateISO = new Date().toISOString()
+  return {
+    id: `empty-${Date.now()}`,
+    dateISO,
+    durationSec: 0,
+    cadenceAvg: 0,
+    cadenceMin: 0,
+    cadenceMax: 0,
+    stabilityStdDev: 0,
+    voMedian: 0,
+    voPeak: 0,
+    qualityAvg: 0,
+    qualityMin: 0,
+    reliability: 'Low',
+    insights: ['Ingen tracking-data fra denne session. Start og stop igen efter lidt tracking for at se nøgletal.'],
+    note: '',
+  }
+}

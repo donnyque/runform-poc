@@ -14,6 +14,7 @@ import {
   computeSummary,
   generateInsights,
   addSession,
+  createEmptySummary,
   updateSessionNote,
   deleteSession,
   loadSessions,
@@ -110,7 +111,6 @@ function App() {
   const [baseline, setBaseline] = useState<Baseline | null>(null)
   const [metricsSnapshot, setMetricsSnapshot] = useState<MetricsSnapshot | null>(null)
   const [trackingTimeMs, setTrackingTimeMs] = useState(0)
-  const [debugMetricsOpen, setDebugMetricsOpen] = useState(false)
   const [view, setView] = useState<ViewMode>('live')
   const [currentSummary, setCurrentSummary] = useState<SessionSummary | null>(null)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
@@ -154,12 +154,8 @@ function App() {
 
   useEffect(() => {
     const needLock = isRunning && (phase === 'calibrating' || phase === 'tracking')
-    if (needLock) {
-      if (!wakeLockSentinelRef.current) requestWakeLock()
-    } else {
-      releaseWakeLock()
-    }
-  }, [isRunning, phase, requestWakeLock, releaseWakeLock])
+    if (!needLock) releaseWakeLock()
+  }, [isRunning, phase, releaseWakeLock])
 
   useEffect(() => {
     const handleVisibility = () => {
@@ -292,6 +288,7 @@ function App() {
       return
     }
 
+    requestWakeLock()
     setError(null)
     setIsRunning(true)
     setPhase('calibrating')
@@ -334,6 +331,7 @@ function App() {
     const samples = [...sessionSamplesRef.current]
 
     await stopPoseRunner()
+    releaseWakeLock()
     setIsRunning(false)
     setPhase('idle')
     phaseRef.current = 'idle'
@@ -363,11 +361,14 @@ function App() {
       )
       setCurrentSummary(saved)
       setSummaryNote(saved.note)
-      setSelectedSessionId(null)
-      setView('summary')
       setSessions(loadSessions())
+    } else {
+      setCurrentSummary(createEmptySummary())
+      setSummaryNote('')
     }
-  }, [])
+    setSelectedSessionId(null)
+    setView('summary')
+  }, [releaseWakeLock])
 
   const handleRecalibrate = useCallback(() => {
     setPhase('calibrating')
@@ -497,9 +498,9 @@ function App() {
     <div className="app" ref={containerRef}>
       <header className="header">
         <h1>RunForm PoC</h1>
-        {wakeLockActive && view === 'live' && (
+        {view === 'live' && (
           <span className="wake-lock-status" role="status">
-            Skærm holdes aktiv
+            Awake: {wakeLockActive ? 'on' : 'off'}
           </span>
         )}
         {view === 'live' && (
@@ -550,8 +551,10 @@ function App() {
         </div>
       )}
 
-      {view === 'summary' && displayedSummary && (
+      {view === 'summary' && (
         <div className="summary-view">
+          <h2 className="summary-view-header">Summary</h2>
+          {displayedSummary ? (
           <section className="summary-card">
             <h2 className="summary-section-title">Session</h2>
             <p className="summary-meta">
@@ -595,6 +598,19 @@ function App() {
               </button>
             </div>
           </section>
+          ) : (
+            <section className="summary-card summary-card-empty">
+              <p className="summary-empty-message">Ingen måledata fra denne session.</p>
+              <div className="summary-actions">
+                <button type="button" className="btn btn-secondary" onClick={handleNewSession}>
+                  Ny session
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={handleBackToLive}>
+                  Tilbage til live
+                </button>
+              </div>
+            </section>
+          )}
         </div>
       )}
 
@@ -687,17 +703,20 @@ function App() {
       )}
 
       {view === 'live' && (
-        <div className="status">
-        <span className="status-item">FPS: {fps}</span>
-        <span className="status-item">
-          Pose: {poseDetected ? 'ja' : 'nej'}
-        </span>
-        {frameQuality != null && (
-          <span className="status-item">
-            Frame quality: {frameQuality}/100
-          </span>
-        )}
-        </div>
+        <details className="debug-accordion">
+          <summary className="debug-accordion-summary">Debug / status</summary>
+          <div className="status">
+            <span className="status-item">FPS: {fps}</span>
+            <span className="status-item">
+              Pose: {poseDetected ? 'ja' : 'nej'}
+            </span>
+            {frameQuality != null && (
+              <span className="status-item">
+                Frame quality: {frameQuality}/100
+              </span>
+            )}
+          </div>
+        </details>
       )}
 
       {view === 'live' && hintMessage && (
@@ -732,8 +751,7 @@ function App() {
         >
           Stop
         </button>
-        </div>
-      )}
+      </div>
       <footer className="app-footer">
         <button
           type="button"
