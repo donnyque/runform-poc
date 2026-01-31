@@ -114,3 +114,54 @@ export function getFrameQualityHint(results: Results): FrameQualityHint {
 
   return { shoulderWidthNormalized, noseAndAnklesOk };
 }
+
+const CALIBRATION_MIN_VISIBILITY = 0.6;
+
+/**
+ * Calibration frame: mid hip Y, mid shoulder Y, and whether frame is good.
+ * Good = pose + frameQuality >= 60 + hip/shoulder visibility >= 0.6.
+ */
+export type CalibrationFrameData = {
+  midHipY: number | null;
+  midShoulderY: number | null;
+  isGood: boolean;
+};
+
+export function getCalibrationFrameData(
+  results: Results,
+  frameQuality: number
+): CalibrationFrameData {
+  const landmarks = results.poseLandmarks;
+  if (!landmarks?.length || frameQuality < 60) {
+    return { midHipY: null, midShoulderY: null, isGood: false };
+  }
+
+  const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
+  const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
+  const leftShoulder = landmarks[POSE_LANDMARKS.LEFT_SHOULDER];
+  const rightShoulder = landmarks[POSE_LANDMARKS.RIGHT_SHOULDER];
+
+  const hipVisOk =
+    getVisibility(landmarks, POSE_LANDMARKS.LEFT_HIP) >= CALIBRATION_MIN_VISIBILITY &&
+    getVisibility(landmarks, POSE_LANDMARKS.RIGHT_HIP) >= CALIBRATION_MIN_VISIBILITY;
+  const shoulderVisOk =
+    getVisibility(landmarks, POSE_LANDMARKS.LEFT_SHOULDER) >= CALIBRATION_MIN_VISIBILITY &&
+    getVisibility(landmarks, POSE_LANDMARKS.RIGHT_SHOULDER) >= CALIBRATION_MIN_VISIBILITY;
+
+  const midHipY =
+    leftHip != null && rightHip != null
+      ? (leftHip.y + rightHip.y) / 2
+      : null;
+  const midShoulderY =
+    leftShoulder != null && rightShoulder != null
+      ? (leftShoulder.y + rightShoulder.y) / 2
+      : null;
+
+  const isGood =
+    hipVisOk &&
+    shoulderVisOk &&
+    midHipY != null &&
+    midShoulderY != null;
+
+  return { midHipY, midShoulderY, isGood };
+}

@@ -102,6 +102,123 @@
   }
 }
 
+/* Calibration panel */
+.calibration-panel {
+  width: 100%;
+  max-width: min(100%, 480px);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+  background: rgba(100, 120, 180, 0.2);
+  border: 1px solid rgba(100, 140, 220, 0.4);
+  border-radius: 12px;
+  box-sizing: border-box;
+}
+
+.calibration-countdown {
+  font-size: 3rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  margin-bottom: 0.75rem;
+  color: #8ab4f8;
+}
+
+.calibration-progress-wrap {
+  height: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.calibration-progress-fill {
+  height: 100%;
+  background: #5a9cf8;
+  border-radius: 6px;
+  transition: width 0.15s ease-out;
+}
+
+.calibration-message {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #b0c8f0;
+  text-align: center;
+}
+
+@media (prefers-color-scheme: light) {
+  .calibration-panel {
+    background: rgba(200, 220, 255, 0.4);
+    border-color: rgba(80, 120, 200, 0.35);
+  }
+  .calibration-countdown {
+    color: #2563eb;
+  }
+  .calibration-progress-wrap {
+    background: rgba(0, 0, 0, 0.1);
+  }
+  .calibration-progress-fill {
+    background: #2563eb;
+  }
+  .calibration-message {
+    color: #1e40af;
+  }
+}
+
+/* Baseline locked + debug */
+.baseline-locked {
+  width: 100%;
+  max-width: min(100%, 480px);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: rgba(50, 160, 80, 0.2);
+  border: 1px solid rgba(60, 180, 90, 0.5);
+  border-radius: 10px;
+  box-sizing: border-box;
+}
+
+.baseline-locked-label {
+  font-weight: 600;
+  font-size: 1rem;
+  color: #6ee7a0;
+}
+
+.debug-panel {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+@media (prefers-color-scheme: light) {
+  .baseline-locked {
+    background: rgba(200, 255, 220, 0.5);
+    border-color: rgba(40, 160, 80, 0.4);
+  }
+  .baseline-locked-label {
+    color: #15803d;
+  }
+  .debug-panel {
+    color: #166534;
+  }
+}
+
+.btn-recalibrate {
+  background-color: #3b82a6;
+  color: #fff;
+}
+
+.btn-recalibrate:hover:not(:disabled) {
+  background-color: #2563eb;
+}
+
+@media (prefers-color-scheme: light) {
+  .btn-recalibrate {
+    background-color: #2563eb;
+    color: #fff;
+  }
+}
+
 /* Hint message (auto-check, one at a time) */
 .hint-message {
   width: 100%;
@@ -217,9 +334,10 @@
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 1rem;
   width: 100%;
-  max-width: min(100%, 320px);
+  max-width: min(100%, 420px);
   justify-content: center;
 }
 

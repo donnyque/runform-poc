@@ -16,11 +16,18 @@ import {
 } from '@mediapipe/pose';
 import {
   computeFrameQuality,
+  getCalibrationFrameData,
   getFrameQualityHint,
   type FrameQualityHint,
 } from './frameQuality';
 
 const MEDIAPIPE_POSE_VERSION = '0.5.1675469404';
+
+export type CalibrationFramePayload = {
+  midHipY: number | null;
+  midShoulderY: number | null;
+  isGood: boolean;
+};
 
 export type PoseRunnerCallbacks = {
   onStatus: (
@@ -29,6 +36,7 @@ export type PoseRunnerCallbacks = {
     frameQuality: number | null,
     hint: FrameQualityHint | null
   ) => void;
+  onCalibrationFrame?: (data: CalibrationFramePayload, timestampMs: number) => void;
   onError: (message: string) => void;
 };
 
@@ -102,6 +110,20 @@ export async function startPoseRunner(
       if (detected) {
         lastFrameQuality = computeFrameQuality(results);
         lastHint = getFrameQualityHint(results);
+        if (
+          callbacks.onCalibrationFrame &&
+          lastFrameQuality != null
+        ) {
+          const cal = getCalibrationFrameData(results, lastFrameQuality);
+          callbacks.onCalibrationFrame(
+            {
+              midHipY: cal.midHipY,
+              midShoulderY: cal.midShoulderY,
+              isGood: cal.isGood,
+            },
+            performance.now()
+          );
+        }
       } else {
         lastFrameQuality = null;
         lastHint = null;
