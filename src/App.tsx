@@ -95,6 +95,7 @@ function App() {
   const isRunningRef = useRef(false)
   const sessionSamplesRef = useRef<SessionSample[]>([])
   const frameQualityRef = useRef<number | null>(null)
+  const lastGoodCadenceRef = useRef<number | null>(null)
 
   const [isRunning, setIsRunning] = useState(false)
   const [wakeLockActive, setWakeLockActive] = useState(false)
@@ -263,7 +264,14 @@ function App() {
 
   const handleTrackingFrame = useCallback(
     (
-      data: { ankleY: number; ankleUsed: 'L' | 'R'; midHipY: number },
+      data: {
+        ankleY: number
+        kneeY: number
+        ankleVis: number
+        kneeVis: number
+        ankleUsed: 'L' | 'R'
+        midHipY: number
+      },
       timestampMs: number
     ) => {
       if (phaseRef.current !== 'tracking') return
@@ -271,6 +279,9 @@ function App() {
       if (!bl) return
       metricsSessionRef.current?.update(
         data.ankleY,
+        data.kneeY,
+        data.ankleVis,
+        data.kneeVis,
         data.ankleUsed,
         data.midHipY,
         bl.hipY,
@@ -347,6 +358,7 @@ function App() {
     setMetricsSnapshot(null)
     setTrackingTimeMs(0)
     metricsSessionRef.current = null
+    lastGoodCadenceRef.current = null
     displayedMessageRef.current = null
     sessionSamplesRef.current = []
 
@@ -382,6 +394,7 @@ function App() {
     samplesMidShoulderYRef.current = []
     lastGoodTimeStateUpdateRef.current = 0
     metricsSessionRef.current = null
+    lastGoodCadenceRef.current = null
     setMetricsSnapshot(null)
     setTrackingTimeMs(0)
   }, [])
@@ -393,6 +406,7 @@ function App() {
       const session = metricsSessionRef.current
       if (session) {
         const snap = session.getSnapshot(now)
+        if (snap.cadence >= 80) lastGoodCadenceRef.current = snap.cadence
         setMetricsSnapshot(snap)
         sessionSamplesRef.current.push({
           t: now,
@@ -586,7 +600,7 @@ function App() {
                 rows={2}
               />
             </label>
-            <button type="button" className="btn btn-primary" onClick={handleSaveNote}>
+            <button type="button" className="btn btn-secondary btn-save-note" onClick={handleSaveNote}>
               Gem note
             </button>
             <div className="summary-actions">
@@ -669,8 +683,17 @@ function App() {
             <div className="metrics-minimal">
               <span className="metric-value">{trackingTimeLabel}</span>
               <span className="metric-label">Tid</span>
-              <span className="metric-value">{metricsSnapshot?.cadence ?? '–'}</span>
-              <span className="metric-label">Cadence spm</span>
+              <span className="metric-value">
+                {(metricsSnapshot?.cadence ?? 0) >= 80
+                  ? (metricsSnapshot?.cadence ?? '–')
+                  : (lastGoodCadenceRef.current ?? metricsSnapshot?.cadence ?? '–')}
+              </span>
+              <span className="metric-label">
+                Cadence spm
+                {(metricsSnapshot?.cadence ?? 0) > 0 && (metricsSnapshot?.cadence ?? 0) < 80 && (
+                  <span className="metric-low-confidence"> (low confidence)</span>
+                )}
+              </span>
             </div>
           </div>
         </>
@@ -715,6 +738,9 @@ function App() {
                 Frame quality: {frameQuality}/100
               </span>
             )}
+            <span className="status-item">
+              stepsLast10s: {metricsSnapshot?.stepsLast10s ?? '–'}
+            </span>
           </div>
         </details>
       )}
@@ -725,33 +751,35 @@ function App() {
         </div>
       )}
 
-      <div className="actions">
-        <button
-          type="button"
-          className="btn btn-start"
-          onClick={handleStart}
-          disabled={isRunning}
-        >
-          Start
-        </button>
-        {phase === 'tracking' && (
+      {view === 'live' && (
+        <div className="actions">
           <button
             type="button"
-            className="btn btn-recalibrate"
-            onClick={handleRecalibrate}
+            className="btn btn-start"
+            onClick={handleStart}
+            disabled={isRunning}
           >
-            Recalibrate
+            Start
           </button>
-        )}
-        <button
-          type="button"
-          className="btn btn-stop"
-          onClick={handleStop}
-          disabled={!isRunning}
-        >
-          Stop
-        </button>
-      </div>
+          {phase === 'tracking' && (
+            <button
+              type="button"
+              className="btn btn-recalibrate"
+              onClick={handleRecalibrate}
+            >
+              Recalibrate
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn btn-stop"
+            onClick={handleStop}
+            disabled={!isRunning}
+          >
+            Stop
+          </button>
+        </div>
+      )}
       <footer className="app-footer">
         <button
           type="button"

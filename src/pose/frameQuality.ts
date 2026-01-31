@@ -169,12 +169,15 @@ export function getCalibrationFrameData(
 const METRICS_MIN_FRAME_QUALITY = 55;
 
 /**
- * Tracking frame for metrics: best ankle Y, which ankle, mid hip Y.
+ * Tracking frame for metrics: best-leg ankle/knee Y and visibility, mid hip Y.
  * Only when pose + frameQuality >= 55.
- * Best ankle = higher visibility of left vs right.
+ * Best leg = higher ankle visibility (L vs R). Step detection can use ankle or knee by visibility.
  */
 export type TrackingFrameData = {
   ankleY: number;
+  kneeY: number;
+  ankleVis: number;
+  kneeVis: number;
   ankleUsed: 'L' | 'R';
   midHipY: number;
 } | null;
@@ -195,8 +198,16 @@ export function getTrackingFrameData(
   const ankleIndex = useLeft
     ? POSE_LANDMARKS_LEFT.LEFT_ANKLE
     : POSE_LANDMARKS_RIGHT.RIGHT_ANKLE;
+  const kneeIndex = useLeft
+    ? POSE_LANDMARKS_LEFT.LEFT_KNEE
+    : POSE_LANDMARKS_RIGHT.RIGHT_KNEE;
+
   const ankle = landmarks[ankleIndex];
-  if (ankle == null) return null;
+  const knee = landmarks[kneeIndex];
+  if (ankle == null || knee == null) return null;
+
+  const ankleVis = getVisibility(landmarks, ankleIndex);
+  const kneeVis = getVisibility(landmarks, kneeIndex);
 
   const leftHip = landmarks[POSE_LANDMARKS.LEFT_HIP];
   const rightHip = landmarks[POSE_LANDMARKS.RIGHT_HIP];
@@ -207,6 +218,9 @@ export function getTrackingFrameData(
 
   return {
     ankleY: ankle.y,
+    kneeY: knee.y,
+    ankleVis,
+    kneeVis,
     ankleUsed: useLeft ? 'L' : 'R',
     midHipY,
   };

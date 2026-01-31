@@ -1,14 +1,18 @@
 /**
  * RunForm PoC – Metrics in tracking mode: cadence, VO proxy, stability.
+ * Cadence = steps_per_minute (foot strikes); steps in last 10s → cadence = stepsLast10s * 6.
  */
 
-const ANKLE_SMOOTH_SAMPLES = 5
-const STEP_AMPLITUDE_THRESHOLD = 0.015
-const STEP_COOLDOWN_MS = 250
+const SMOOTH_SAMPLES = 5
+const STEP_AMPLITUDE_THRESHOLD = 0.012
+const STEP_COOLDOWN_MS = 280
 const STEP_WINDOW_MS = 10_000
 const VO_WINDOW_MS = 5_000
 const CADENCE_SAMPLE_INTERVAL_MS = 500
 const CADENCE_SAMPLE_WINDOW_MS = 30_000
+
+/** Cadence = steps in last 10s * 6 (10s * 6 = 60s). */
+const CADENCE_FACTOR = 6
 
 function mean(arr: number[]): number {
   if (arr.length === 0) return 0
@@ -31,8 +35,8 @@ export type MetricsSnapshot = {
 }
 
 export class MetricsSession {
-  private ankleBuffer: number[] = []
-  private prevSmoothedAnkleY: number = 0
+  private stepSignalBuffer: number[] = []
+  private prevSmoothedY: number = 0
   private direction: 'up' | 'down' | null = null
   private lastPeakY: number = 0
   private lastStepTime: number = 0
@@ -44,6 +48,9 @@ export class MetricsSession {
 
   update(
     ankleY: number,
+    kneeY: number,
+    ankleVis: number,
+    kneeVis: number,
     ankleUsed: 'L' | 'R',
     midHipY: number,
     baselineHipY: number,
@@ -51,19 +58,20 @@ export class MetricsSession {
   ): void {
     this.currentAnkle = ankleUsed
 
-    this.ankleBuffer.push(ankleY)
-    if (this.ankleBuffer.length > ANKLE_SMOOTH_SAMPLES) {
-      this.ankleBuffer.shift()
+    const stepY = ankleVis >= kneeVis ? ankleY : kneeY
+    this.stepSignalBuffer.push(stepY)
+    if (this.stepSignalBuffer.length > SMOOTH_SAMPLES) {
+      this.stepSignalBuffer.shift()
     }
-    const smoothedAnkleY = mean(this.ankleBuffer)
-    const dy = smoothedAnkleY - this.prevSmoothedAnkleY
+    const smoothedY = mean(this.stepSignalBuffer)
+    const dy = smoothedY - this.prevSmoothedY
 
     if (dy > 0) {
       this.direction = 'up'
-      this.lastPeakY = smoothedAnkleY
+      this.lastPeakY = smoothedY
     } else if (dy < 0) {
       if (this.direction === 'up') {
-        const amplitude = this.lastPeakY - smoothedAnkleY
+        const amplitude = this.lastPeakY - smoothedY
         const cooldownOk = timestampMs - this.lastStepTime >= STEP_COOLDOWN_MS
         if (amplitude >= STEP_AMPLITUDE_THRESHOLD && cooldownOk) {
           this.stepTimestamps.push(timestampMs)
@@ -73,7 +81,7 @@ export class MetricsSession {
       this.direction = 'down'
     }
 
-    this.prevSmoothedAnkleY = smoothedAnkleY
+    this.prevSmoothedY = smoothedY
 
     const cutoffSteps = timestampMs - STEP_WINDOW_MS
     this.stepTimestamps = this.stepTimestamps.filter((t) => t >= cutoffSteps)
@@ -88,7 +96,7 @@ export class MetricsSession {
       const stepsIn10s = this.stepTimestamps.filter(
         (t) => t >= timestampMs - STEP_WINDOW_MS
       ).length
-      const cadence = (stepsIn10s / 10) * 60
+      const cadence = stepsIn10s * CADENCE_FACTOR
       this.cadenceSamples.push({ t: timestampMs, cadence })
       const cutoffCadence = timestampMs - CADENCE_SAMPLE_WINDOW_MS
       this.cadenceSamples = this.cadenceSamples.filter(
@@ -101,7 +109,7 @@ export class MetricsSession {
     const stepsIn10s = this.stepTimestamps.filter(
       (t) => t >= timestampMs - STEP_WINDOW_MS
     ).length
-    const cadence = (stepsIn10s / 10) * 60
+    const cadence = stepsIn10s * CADENCE_FACTOR
 
     const devs = this.deviations
       .filter((d) => d.t >= timestampMs - VO_WINDOW_MS)
@@ -124,8 +132,8 @@ export class MetricsSession {
   }
 
   reset(): void {
-    this.ankleBuffer = []
-    this.prevSmoothedAnkleY = 0
+    this.stepSignalBuffer = []
+    this.prevSmoothedY = 0
     this.direction = null
     this.lastPeakY = 0
     this.lastStepTime = 0

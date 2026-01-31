@@ -32,6 +32,9 @@ export type CalibrationFramePayload = {
 
 export type TrackingFramePayload = {
   ankleY: number;
+  kneeY: number;
+  ankleVis: number;
+  kneeVis: number;
   ankleUsed: 'L' | 'R';
   midHipY: number;
 };
@@ -145,14 +148,7 @@ export async function startPoseRunner(
             lastTrackingFrameTime = now;
             const track = getTrackingFrameData(results, lastFrameQuality);
             if (track) {
-              callbacks.onTrackingFrame(
-                {
-                  ankleY: track.ankleY,
-                  ankleUsed: track.ankleUsed,
-                  midHipY: track.midHipY,
-                },
-                now
-              );
+              callbacks.onTrackingFrame(track, now);
             }
           }
         }
