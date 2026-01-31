@@ -13,6 +13,8 @@ export type SessionSummary = {
   id: string
   dateISO: string
   durationSec: number
+  totalDurationSec: number
+  activeDurationSec: number
   cadenceAvg: number
   cadenceMin: number
   cadenceMax: number
@@ -56,10 +58,12 @@ function percentile(arr: number[], p: number): number {
 
 export function computeSummary(
   samples: SessionSample[],
-  startTimeMs: number,
-  endTimeMs: number
+  _startTimeMs: number,
+  _endTimeMs: number,
+  totalDurationSec: number,
+  activeDurationSec: number
 ): Omit<SessionSummary, 'id' | 'dateISO' | 'insights' | 'note'> {
-  const durationSec = Math.round((endTimeMs - startTimeMs) / 1000)
+  const durationSec = activeDurationSec
   const cadenceValues = samples.map((s) => s.cadence).filter((v) => v >= 0)
   const voValues = samples.map((s) => s.voProxy).filter((v) => v >= 0)
   const qualityValues = samples.map((s) => s.quality).filter((v) => v >= 0)
@@ -91,6 +95,8 @@ export function computeSummary(
 
   return {
     durationSec,
+    totalDurationSec,
+    activeDurationSec,
     cadenceAvg,
     cadenceMin,
     cadenceMax,
@@ -154,7 +160,12 @@ export function loadSessions(): SessionSummary[] {
     const raw = localStorage.getItem(SESSIONS_STORAGE_KEY)
     if (!raw) return []
     const parsed = JSON.parse(raw) as SessionSummary[]
-    return Array.isArray(parsed) ? parsed : []
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((s) => ({
+      ...s,
+      totalDurationSec: s.totalDurationSec ?? s.durationSec,
+      activeDurationSec: s.activeDurationSec ?? s.durationSec,
+    }))
   } catch {
     return []
   }
@@ -173,6 +184,12 @@ export function addSession(
   summary: Omit<SessionSummary, 'id' | 'note'>,
   note: string = ''
 ): SessionSummary {
+  if (!('totalDurationSec' in summary) || typeof summary.totalDurationSec !== 'number') {
+    (summary as SessionSummary).totalDurationSec = summary.durationSec
+  }
+  if (!('activeDurationSec' in summary) || typeof summary.activeDurationSec !== 'number') {
+    (summary as SessionSummary).activeDurationSec = summary.durationSec
+  }
   const session: SessionSummary = {
     ...summary,
     id: `session-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
@@ -199,12 +216,14 @@ export function deleteSession(id: string): void {
 }
 
 /** Fallback summary when Stop is pressed but no tracking samples (e.g. stopped right after calibrating). */
-export function createEmptySummary(): SessionSummary {
+export function createEmptySummary(totalDurationSec = 0, activeDurationSec = 0): SessionSummary {
   const dateISO = new Date().toISOString()
   return {
     id: `empty-${Date.now()}`,
     dateISO,
-    durationSec: 0,
+    durationSec: activeDurationSec,
+    totalDurationSec,
+    activeDurationSec,
     cadenceAvg: 0,
     cadenceMin: 0,
     cadenceMax: 0,

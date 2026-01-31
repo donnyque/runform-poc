@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   startPoseRunner,
   stopPoseRunner,
+  pausePoseRunner,
+  resumePoseRunner,
 } from './pose/poseRunner'
 import type { FrameQualityHint } from './pose/frameQuality'
 import { MetricsSession, type MetricsSnapshot } from './pose/metrics'
@@ -91,15 +93,22 @@ function App() {
   const baselineRef = useRef<Baseline | null>(null)
   const metricsSessionRef = useRef<MetricsSession | null>(null)
   const trackingStartTimeRef = useRef<number>(0)
+  const sessionStartTimeRef = useRef<number>(0)
+  const activeStartMsRef = useRef<number>(0)
+  const activeAccumMsRef = useRef<number>(0)
   const wakeLockSentinelRef = useRef<WakeLockSentinelLike | null>(null)
   const isRunningRef = useRef(false)
   const sessionSamplesRef = useRef<SessionSample[]>([])
   const frameQualityRef = useRef<number | null>(null)
   const lastGoodCadenceRef = useRef<number | null>(null)
+  const pausedRef = useRef(false)
 
   const [isRunning, setIsRunning] = useState(false)
   const [wakeLockActive, setWakeLockActive] = useState(false)
+  const [paused, setPaused] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
+  const [totalTimeMs, setTotalTimeMs] = useState(0)
+  const [activeTimeMs, setActiveTimeMs] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const [fps, setFps] = useState(0)
   const [poseDetected, setPoseDetected] = useState(false)
@@ -111,7 +120,6 @@ function App() {
   const [calibrationGoodFrame, setCalibrationGoodFrame] = useState(false)
   const [baseline, setBaseline] = useState<Baseline | null>(null)
   const [metricsSnapshot, setMetricsSnapshot] = useState<MetricsSnapshot | null>(null)
-  const [trackingTimeMs, setTrackingTimeMs] = useState(0)
   const [view, setView] = useState<ViewMode>('live')
   const [currentSummary, setCurrentSummary] = useState<SessionSummary | null>(null)
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
@@ -121,6 +129,10 @@ function App() {
   useEffect(() => {
     phaseRef.current = phase
   }, [phase])
+
+  useEffect(() => {
+    pausedRef.current = paused
+  }, [paused])
 
   useEffect(() => {
     isRunningRef.current = isRunning
@@ -154,16 +166,16 @@ function App() {
   }, [])
 
   useEffect(() => {
-    const needLock = isRunning && (phase === 'calibrating' || phase === 'tracking')
+    const needLock = isRunning && (phase === 'calibrating' || (phase === 'tracking' && !paused))
     if (!needLock) releaseWakeLock()
-  }, [isRunning, phase, releaseWakeLock])
+  }, [isRunning, phase, paused, releaseWakeLock])
 
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState !== 'visible') return
-      if (isRunningRef.current && (phaseRef.current === 'calibrating' || phaseRef.current === 'tracking') && !wakeLockSentinelRef.current) {
-        requestWakeLock()
-      }
+      const ph = phaseRef.current
+      const needLock = isRunningRef.current && (ph === 'calibrating' || (ph === 'tracking' && !pausedRef.current))
+      if (needLock && !wakeLockSentinelRef.current) requestWakeLock()
     }
     document.addEventListener('visibilitychange', handleVisibility)
     return () => document.removeEventListener('visibilitychange', handleVisibility)
@@ -250,9 +262,14 @@ function App() {
         baselineRef.current = bl
         setGoodTimeMs(CALIBRATION_DURATION_MS)
         metricsSessionRef.current = new MetricsSession()
-        trackingStartTimeRef.current = performance.now()
+        const now = performance.now()
+        trackingStartTimeRef.current = now
+        activeStartMsRef.current = now
+        activeAccumMsRef.current = 0
         setPhase('tracking')
         phaseRef.current = 'tracking'
+        setPaused(false)
+        setActiveTimeMs(0)
         goodTimeAccumulatedRef.current = 0
         lastGoodTimestampRef.current = 0
         samplesMidHipYRef.current = []
@@ -302,6 +319,8 @@ function App() {
     requestWakeLock()
     setError(null)
     setIsRunning(true)
+    setPaused(false)
+    sessionStartTimeRef.current = performance.now()
     setPhase('calibrating')
     phaseRef.current = 'calibrating'
     setGoodTimeMs(0)
@@ -317,6 +336,9 @@ function App() {
     displayedMessageRef.current = null
     setHintMessage(null)
     sessionSamplesRef.current = []
+    activeAccumMsRef.current = 0
+    setTotalTimeMs(0)
+    setActiveTimeMs(0)
 
     await startPoseRunner(video, canvas, {
       onStatus: (f, p, q, h) => {
@@ -336,14 +358,35 @@ function App() {
     })
   }, [handleCalibrationFrame, handleTrackingFrame])
 
+  const handlePause = useCallback(() => {
+    const now = performance.now()
+    activeAccumMsRef.current += now - activeStartMsRef.current
+    pausePoseRunner()
+    setPaused(true)
+  }, [])
+
+  const handleResume = useCallback(() => {
+    activeStartMsRef.current = performance.now()
+    resumePoseRunner()
+    setPaused(false)
+    requestWakeLock()
+  }, [requestWakeLock])
+
   const handleStop = useCallback(async () => {
     const endTime = performance.now()
     const startTime = trackingStartTimeRef.current
     const samples = [...sessionSamplesRef.current]
+    const totalDurationMs = endTime - sessionStartTimeRef.current
+    const activeDurationMs =
+      activeAccumMsRef.current +
+      (pausedRef.current ? 0 : endTime - activeStartMsRef.current)
+    const totalDurationSec = Math.round(totalDurationMs / 1000)
+    const activeDurationSec = Math.round(activeDurationMs / 1000)
 
     await stopPoseRunner()
     releaseWakeLock()
     setIsRunning(false)
+    setPaused(false)
     setPhase('idle')
     phaseRef.current = 'idle'
     setError(null)
@@ -356,14 +399,19 @@ function App() {
     setBaseline(null)
     baselineRef.current = null
     setMetricsSnapshot(null)
-    setTrackingTimeMs(0)
     metricsSessionRef.current = null
     lastGoodCadenceRef.current = null
     displayedMessageRef.current = null
     sessionSamplesRef.current = []
 
     if (samples.length > 0) {
-      const base = computeSummary(samples, startTime, endTime)
+      const base = computeSummary(
+        samples,
+        startTime,
+        endTime,
+        totalDurationSec,
+        activeDurationSec
+      )
       const voValues = samples.map((s) => s.voProxy)
       const insights = generateInsights(base, voValues)
       const dateISO = new Date().toISOString()
@@ -375,36 +423,36 @@ function App() {
       setSummaryNote(saved.note)
       setSessions(loadSessions())
     } else {
-      setCurrentSummary(createEmptySummary())
+      setCurrentSummary(createEmptySummary(totalDurationSec, activeDurationSec))
       setSummaryNote('')
     }
     setSelectedSessionId(null)
     setView('summary')
   }, [releaseWakeLock])
 
-  const handleRecalibrate = useCallback(() => {
-    setPhase('calibrating')
-    phaseRef.current = 'calibrating'
-    setGoodTimeMs(0)
-    setCalibrationGoodFrame(false)
-    calibrationGoodFrameRef.current = false
-    goodTimeAccumulatedRef.current = 0
-    lastGoodTimestampRef.current = 0
-    samplesMidHipYRef.current = []
-    samplesMidShoulderYRef.current = []
-    lastGoodTimeStateUpdateRef.current = 0
-    metricsSessionRef.current = null
-    lastGoodCadenceRef.current = null
-    setMetricsSnapshot(null)
-    setTrackingTimeMs(0)
-  }, [])
+  useEffect(() => {
+    if (!isRunning) return
+    const interval = setInterval(() => {
+      const now = performance.now()
+      setTotalTimeMs(Math.max(0, now - sessionStartTimeRef.current))
+      if (phaseRef.current === 'tracking') {
+        const active =
+          activeAccumMsRef.current +
+          (pausedRef.current ? 0 : now - activeStartMsRef.current)
+        setActiveTimeMs(Math.max(0, active))
+      } else {
+        setActiveTimeMs(0)
+      }
+    }, 500)
+    return () => clearInterval(interval)
+  }, [isRunning])
 
   useEffect(() => {
     if (phase !== 'tracking' || !metricsSessionRef.current) return
     const interval = setInterval(() => {
       const now = performance.now()
       const session = metricsSessionRef.current
-      if (session) {
+      if (session && !pausedRef.current) {
         const snap = session.getSnapshot(now)
         if (snap.cadence >= 80) lastGoodCadenceRef.current = snap.cadence
         setMetricsSnapshot(snap)
@@ -415,7 +463,6 @@ function App() {
           quality: frameQualityRef.current ?? 0,
         })
       }
-      setTrackingTimeMs(Math.max(0, now - trackingStartTimeRef.current))
     }, METRICS_UPDATE_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [phase])
@@ -487,9 +534,25 @@ function App() {
   )
   const calibrationProgress = goodTimeMs / CALIBRATION_DURATION_MS
 
-  const trackingMm = Math.floor(trackingTimeMs / 60_000)
-  const trackingSs = Math.floor((trackingTimeMs % 60_000) / 1000)
-  const trackingTimeLabel = `${String(trackingMm).padStart(2, '0')}:${String(trackingSs).padStart(2, '0')}`
+  const totalMm = Math.floor(totalTimeMs / 60_000)
+  const totalSs = Math.floor((totalTimeMs % 60_000) / 1000)
+  const totalTimeLabel = `${String(totalMm).padStart(2, '0')}:${String(totalSs).padStart(2, '0')}`
+  const activeMm = Math.floor(activeTimeMs / 60_000)
+  const activeSs = Math.floor((activeTimeMs % 60_000) / 1000)
+  const activeTimeLabel = `${String(activeMm).padStart(2, '0')}:${String(activeSs).padStart(2, '0')}`
+
+  const statusChipLabel =
+    view === 'summary'
+      ? 'SUMMARY'
+      : view === 'history'
+        ? 'HISTORY'
+        : phase === 'calibrating'
+          ? 'CALIBRATING'
+          : phase === 'tracking' && paused
+            ? 'PAUSED'
+            : phase === 'tracking'
+              ? 'TRACKING'
+              : 'IDLE'
 
   const formatSessionDate = (dateISO: string) => {
     const d = new Date(dateISO)
@@ -511,7 +574,12 @@ function App() {
   return (
     <div className="app" ref={containerRef}>
       <header className="header">
-        <h1>RunForm PoC</h1>
+        <div className="header-row">
+          <h1>RunForm PoC</h1>
+          <span className="status-chip" role="status" aria-label={`Status: ${statusChipLabel}`}>
+            {statusChipLabel}
+          </span>
+        </div>
         {view === 'live' && (
           <span className="wake-lock-status" role="status">
             Awake: {wakeLockActive ? 'on' : 'off'}
@@ -543,7 +611,9 @@ function App() {
                   onClick={() => handleOpenHistorySession(s.id)}
                 >
                   <span className="history-item-date">{formatSessionDate(s.dateISO)}</span>
-                  <span className="history-item-dur">{formatDuration(s.durationSec)}</span>
+                  <span className="history-item-meta">
+                    {formatDuration(s.totalDurationSec ?? s.durationSec)} · {s.cadenceAvg} spm · {s.reliability}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -572,8 +642,15 @@ function App() {
           <section className="summary-card">
             <h2 className="summary-section-title">Session</h2>
             <p className="summary-meta">
-              {formatSessionDate(displayedSummary.dateISO)} · {formatDuration(displayedSummary.durationSec)}
+              {formatSessionDate(displayedSummary.dateISO)}
             </p>
+            <div className="summary-times">
+              <span>Total tid: {formatDuration(displayedSummary.totalDurationSec ?? displayedSummary.durationSec)}</span>
+              <span>Aktiv tid: {formatDuration(displayedSummary.activeDurationSec ?? displayedSummary.durationSec)}</span>
+              {(displayedSummary.totalDurationSec ?? 0) > (displayedSummary.activeDurationSec ?? 0) && (
+                <span>Pause tid: {formatDuration((displayedSummary.totalDurationSec ?? 0) - (displayedSummary.activeDurationSec ?? 0))}</span>
+              )}
+            </div>
             <h2 className="summary-section-title">Nøgletal</h2>
             <div className="summary-stats">
               <span>Cadence: {displayedSummary.cadenceAvg} spm</span>
@@ -611,7 +688,7 @@ function App() {
                 Tilbage til live
               </button>
             </div>
-          </section>
+            </section>
           ) : (
             <section className="summary-card summary-card-empty">
               <p className="summary-empty-message">Ingen måledata fra denne session.</p>
@@ -625,6 +702,37 @@ function App() {
               </div>
             </section>
           )}
+
+          <details className="history-accordion">
+            <summary className="history-accordion-summary">Seneste sessioner</summary>
+            <ul className="history-list">
+              {sessions.slice(0, 10).map((s) => (
+                <li key={s.id} className="history-item">
+                  <button
+                    type="button"
+                    className="history-item-btn"
+                    onClick={() => handleOpenHistorySession(s.id)}
+                  >
+                    <span className="history-item-date">{formatSessionDate(s.dateISO)}</span>
+                    <span className="history-item-meta">
+                      {formatDuration(s.totalDurationSec ?? s.durationSec)} · {s.cadenceAvg} spm · {s.reliability}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="history-item-delete"
+                    onClick={() => handleDeleteSession(s.id)}
+                    aria-label="Slet session"
+                  >
+                    Slet
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {sessions.length === 0 && (
+              <p className="history-empty">Ingen sessioner endnu.</p>
+            )}
+          </details>
         </div>
       )}
 
@@ -674,15 +782,19 @@ function App() {
         </div>
       )}
 
-      {view === 'live' && phase === 'tracking' && (
+      {view === 'live' && (phase === 'tracking' || paused) && (
         <>
           <div className="baseline-locked baseline-locked-minimal" role="status">
-            <span className="baseline-locked-label">Baseline locked</span>
+            <span className="baseline-locked-label">
+              {paused ? 'Pauset' : 'Baseline locked'}
+            </span>
           </div>
           <div className="metrics-panel metrics-panel-minimal" role="region" aria-label="Live">
-            <div className="metrics-minimal">
-              <span className="metric-value">{trackingTimeLabel}</span>
-              <span className="metric-label">Tid</span>
+            <div className="metrics-minimal metrics-minimal-times">
+              <span className="metric-value">{totalTimeLabel}</span>
+              <span className="metric-label">Total tid</span>
+              <span className="metric-value">{activeTimeLabel}</span>
+              <span className="metric-label">Aktiv tid</span>
               <span className="metric-value">
                 {(metricsSnapshot?.cadence ?? 0) >= 80
                   ? (metricsSnapshot?.cadence ?? '–')
@@ -697,6 +809,17 @@ function App() {
             </div>
           </div>
         </>
+      )}
+
+      {view === 'live' && isRunning && phase === 'calibrating' && (
+        <div className="metrics-panel metrics-panel-minimal" role="region">
+          <div className="metrics-minimal">
+            <span className="metric-value">{totalTimeLabel}</span>
+            <span className="metric-label">Total tid</span>
+            <span className="metric-value">0:00</span>
+            <span className="metric-label">Aktiv tid</span>
+          </div>
+        </div>
       )}
 
       {view === 'live' && (
@@ -753,31 +876,60 @@ function App() {
 
       {view === 'live' && (
         <div className="actions">
-          <button
-            type="button"
-            className="btn btn-start"
-            onClick={handleStart}
-            disabled={isRunning}
-          >
-            Start
-          </button>
-          {phase === 'tracking' && (
+          {phase === 'idle' && (
             <button
               type="button"
-              className="btn btn-recalibrate"
-              onClick={handleRecalibrate}
+              className="btn btn-start"
+              onClick={handleStart}
             >
-              Recalibrate
+              Start
             </button>
           )}
-          <button
-            type="button"
-            className="btn btn-stop"
-            onClick={handleStop}
-            disabled={!isRunning}
-          >
-            Stop
-          </button>
+          {phase === 'calibrating' && (
+            <button
+              type="button"
+              className="btn btn-stop"
+              onClick={handleStop}
+            >
+              Stop (abort)
+            </button>
+          )}
+          {phase === 'tracking' && !paused && (
+            <>
+              <button
+                type="button"
+                className="btn btn-pause"
+                onClick={handlePause}
+              >
+                Pause
+              </button>
+              <button
+                type="button"
+                className="btn btn-stop"
+                onClick={handleStop}
+              >
+                Stop Session
+              </button>
+            </>
+          )}
+          {phase === 'tracking' && paused && (
+            <>
+              <button
+                type="button"
+                className="btn btn-start"
+                onClick={handleResume}
+              >
+                Resume
+              </button>
+              <button
+                type="button"
+                className="btn btn-stop"
+                onClick={handleStop}
+              >
+                Stop Session
+              </button>
+            </>
+          )}
         </div>
       )}
       <footer className="app-footer">

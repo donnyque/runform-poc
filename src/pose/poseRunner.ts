@@ -63,6 +63,7 @@ let lastPoseDetected = false;
 let lastFrameQuality: number | null = null;
 let lastHint: FrameQualityHint | null = null;
 let lastTrackingFrameTime = 0;
+let isPaused = false;
 
 function getLocateFile(): (path: string, prefix?: string) => string {
   return (path: string) => {
@@ -164,6 +165,7 @@ export async function startPoseRunner(
     camera = new Camera(video, {
       facingMode: 'user',
       onFrame: async () => {
+        if (isPaused) return;
         if (video.videoWidth && video.videoHeight) {
           if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
             canvas.width = video.videoWidth;
@@ -201,7 +203,16 @@ export async function startPoseRunner(
   }
 }
 
+export function pausePoseRunner(): void {
+  isPaused = true;
+}
+
+export function resumePoseRunner(): void {
+  isPaused = false;
+}
+
 export async function stopPoseRunner(): Promise<void> {
+  isPaused = false;
   if (animationId !== null) {
     cancelAnimationFrame(animationId);
     animationId = null;
