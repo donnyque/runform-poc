@@ -23,6 +23,7 @@ import {
   type SessionSummary,
   type SessionSample,
 } from './sessionSummary'
+import { Sparkline } from './Sparkline'
 import './App.css'
 
 export type ViewMode = 'live' | 'summary' | 'history'
@@ -125,6 +126,7 @@ function App() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [summaryNote, setSummaryNote] = useState('')
   const [sessions, setSessions] = useState<SessionSummary[]>(() => loadSessions())
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
 
   useEffect(() => {
     phaseRef.current = phase
@@ -416,7 +418,13 @@ function App() {
       const insights = generateInsights(base, voValues)
       const dateISO = new Date().toISOString()
       const saved = addSession(
-        { ...base, dateISO, insights },
+        {
+          ...base,
+          dateISO,
+          insights,
+          cadenceSamples: samples.map((s) => s.cadence),
+          qualitySamples: samples.map((s) => s.quality),
+        },
         ''
       )
       setCurrentSummary(saved)
@@ -521,12 +529,87 @@ function App() {
     }
   }, [selectedSessionId, currentSummary?.id])
 
+  const displayedSummaryRef = useRef<SessionSummary | null>(null)
+
+  const handleCopySummary = useCallback(() => {
+    if (!displayedSummaryRef.current) return
+    const s = displayedSummaryRef.current
+    const total = s.totalDurationSec ?? s.durationSec
+    const active = s.activeDurationSec ?? s.durationSec
+    const formatD = (sec: number) => {
+      const m = Math.floor(sec / 60)
+      const ss = sec % 60
+      return `${m}:${String(ss).padStart(2, '0')}`
+    }
+    const formatDate = (dateISO: string) => {
+      const d = new Date(dateISO)
+      return d.toLocaleDateString('da-DK', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    }
+    const lines = [
+      `Session: ${formatDate(s.dateISO)}`,
+      `Total tid: ${formatD(total)} · Aktiv tid: ${formatD(active)}`,
+      `Cadence: ${s.cadenceAvg} spm · Stability: ${s.stabilityStdDev} · VO proxy: ${s.voMedian.toFixed(3)} · Pålidelighed: ${s.reliability}`,
+      'Indsigt:',
+      ...s.insights.map((line) => `  · ${line}`),
+    ]
+    if (s.note.trim()) lines.push(`Note: ${s.note.trim()}`)
+    const text = lines.join('\n')
+    navigator.clipboard.writeText(text).then(
+      () => {
+        setCopyFeedback('Kopieret!')
+        setTimeout(() => setCopyFeedback(null), 2000)
+      },
+      () => setCopyFeedback('Kunne ikke kopiere')
+    )
+  }, [])
+
   const displayedSummary: SessionSummary | null =
     view === 'summary'
       ? selectedSessionId
         ? sessions.find((s) => s.id === selectedSessionId) ?? currentSummary
         : currentSummary
       : null
+
+  displayedSummaryRef.current = displayedSummary
+
+  const sortedSessions = [...sessions].sort(
+    (a, b) => new Date(b.dateISO).getTime() - new Date(a.dateISO).getTime()
+  )
+  const currentIndex = displayedSummary
+    ? sortedSessions.findIndex((s) => s.id === displayedSummary.id)
+    : -1
+  const previousSession: SessionSummary | null =
+    currentIndex >= 0 && currentIndex < sortedSessions.length - 1
+      ? sortedSessions[currentIndex + 1] ?? null
+      : null
+
+  const compareDeltas =
+    displayedSummary && previousSession
+      ? {
+          cadence: displayedSummary.cadenceAvg - previousSession.cadenceAvg,
+          stability: displayedSummary.stabilityStdDev - previousSession.stabilityStdDev,
+          vo: displayedSummary.voMedian - previousSession.voMedian,
+        }
+      : null
+
+  const handleExportJson = useCallback(() => {
+    const s = displayedSummaryRef.current
+    if (!s) return
+    const json = JSON.stringify(s, null, 2)
+    const blob = new Blob([json], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `runform-session-${s.id}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [])
 
   const calibrationSecondsRemaining = Math.max(
     0,
@@ -658,6 +741,42 @@ function App() {
               <span>VO proxy: {displayedSummary.voMedian.toFixed(3)} rel</span>
               <span>Pålidelighed: {displayedSummary.reliability}</span>
             </div>
+            <div className="summary-sparklines">
+              <div className="sparkline-block">
+                <span className="sparkline-label">Cadence</span>
+                <Sparkline
+                  data={displayedSummary.cadenceSamples ?? []}
+                  width={100}
+                  height={28}
+                  className="sparkline-canvas"
+                />
+              </div>
+              <div className="sparkline-block">
+                <span className="sparkline-label">Quality</span>
+                <Sparkline
+                  data={displayedSummary.qualitySamples ?? []}
+                  width={100}
+                  height={28}
+                  className="sparkline-canvas"
+                />
+              </div>
+            </div>
+            {compareDeltas && (
+              <div className="summary-compare" role="region" aria-label="Sammenligning med forrige session">
+                <span className="summary-compare-title">Sammenlignet med forrige</span>
+                <div className="summary-compare-rows">
+                  <span className="compare-row">
+                    Cadence {compareDeltas.cadence >= 0 ? '↑' : '↓'} {Math.abs(compareDeltas.cadence).toFixed(1)} spm
+                  </span>
+                  <span className="compare-row">
+                    Stability {compareDeltas.stability <= 0 ? '↓' : '↑'} {Math.abs(compareDeltas.stability).toFixed(1)}
+                  </span>
+                  <span className="compare-row">
+                    VO {compareDeltas.vo <= 0 ? '↓' : '↑'} {Math.abs(compareDeltas.vo).toFixed(3)}
+                  </span>
+                </div>
+              </div>
+            )}
             <h2 className="summary-section-title">Indsigt</h2>
             <ul className="summary-insights">
               {displayedSummary.insights.map((line, i) => (
@@ -680,6 +799,14 @@ function App() {
             <button type="button" className="btn btn-secondary btn-save-note" onClick={handleSaveNote}>
               Gem note
             </button>
+            <div className="summary-copy-export">
+              <button type="button" className="btn btn-secondary btn-copy-export" onClick={handleCopySummary}>
+                {copyFeedback ?? 'Kopier summary'}
+              </button>
+              <button type="button" className="btn btn-secondary btn-copy-export" onClick={handleExportJson}>
+                Eksport JSON
+              </button>
+            </div>
             <div className="summary-actions">
               <button type="button" className="btn btn-secondary" onClick={handleNewSession}>
                 Ny session

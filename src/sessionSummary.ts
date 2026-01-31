@@ -26,6 +26,10 @@ export type SessionSummary = {
   reliability: 'High' | 'Medium' | 'Low'
   insights: string[]
   note: string
+  /** Cadence per sample (for sparkline). */
+  cadenceSamples?: number[]
+  /** Quality per sample (for sparkline). */
+  qualitySamples?: number[]
 }
 
 function mean(arr: number[]): number {
@@ -235,5 +239,7 @@ export function createEmptySummary(totalDurationSec = 0, activeDurationSec = 0):
     reliability: 'Low',
     insights: ['Ingen tracking-data fra denne session. Start og stop igen efter lidt tracking for at se nøgletal.'],
     note: '',
+    cadenceSamples: [],
+    qualitySamples: [],
   }
 }
