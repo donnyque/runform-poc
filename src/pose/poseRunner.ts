@@ -14,11 +14,21 @@ import {
   POSE_CONNECTIONS,
   type Results,
 } from '@mediapipe/pose';
+import {
+  computeFrameQuality,
+  getFrameQualityHint,
+  type FrameQualityHint,
+} from './frameQuality';
 
 const MEDIAPIPE_POSE_VERSION = '0.5.1675469404';
 
 export type PoseRunnerCallbacks = {
-  onStatus: (fps: number, poseDetected: boolean) => void;
+  onStatus: (
+    fps: number,
+    poseDetected: boolean,
+    frameQuality: number | null,
+    hint: FrameQualityHint | null
+  ) => void;
   onError: (message: string) => void;
 };
 
@@ -29,6 +39,8 @@ let lastStatusTime = 0;
 let frameCount = 0;
 let lastFps = 0;
 let lastPoseDetected = false;
+let lastFrameQuality: number | null = null;
+let lastHint: FrameQualityHint | null = null;
 
 function getLocateFile(): (path: string, prefix?: string) => string {
   return (path: string) => {
@@ -87,6 +99,13 @@ export async function startPoseRunner(
         results.poseLandmarks && results.poseLandmarks.length > 0
       );
       lastPoseDetected = detected;
+      if (detected) {
+        lastFrameQuality = computeFrameQuality(results);
+        lastHint = getFrameQualityHint(results);
+      } else {
+        lastFrameQuality = null;
+        lastHint = null;
+      }
       drawResults(ctx, results);
     });
 
@@ -107,7 +126,7 @@ export async function startPoseRunner(
           lastFps = Math.round((frameCount * 1000) / (now - lastStatusTime));
           frameCount = 0;
           lastStatusTime = now;
-          callbacks.onStatus(lastFps, lastPoseDetected);
+          callbacks.onStatus(lastFps, lastPoseDetected, lastFrameQuality, lastHint);
         }
         if (pose && video.readyState >= 2) {
           await pose.send({ image: video });
@@ -123,7 +142,7 @@ export async function startPoseRunner(
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
     }
-    callbacks.onStatus(0, false);
+    callbacks.onStatus(0, false, null, null);
   } catch (err) {
     const message =
       err instanceof Error ? err.message : 'Ukendt fejl ved start af kamera/pose.';

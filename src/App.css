@@ -20,6 +20,111 @@
   font-weight: 700;
 }
 
+.link-setup {
+  display: inline-block;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;
+  color: #646cff;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: underline;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.link-setup:hover {
+  color: #535bf2;
+}
+
+/* Onboarding overlay */
+.onboarding-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.7);
+  box-sizing: border-box;
+}
+
+.onboarding-card {
+  width: 100%;
+  max-width: min(100%, 360px);
+  padding: 1.5rem;
+  background: #2a2a2a;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  box-sizing: border-box;
+}
+
+.onboarding-card h2 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.onboarding-list {
+  margin: 0 0 1.5rem;
+  padding-left: 1.25rem;
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.onboarding-list li {
+  margin-bottom: 0.5rem;
+}
+
+.btn-ok {
+  width: 100%;
+  min-height: 48px;
+  background-color: #2d7d46;
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.btn-ok:hover:not(:disabled) {
+  background-color: #248f3d;
+}
+
+@media (prefers-color-scheme: light) {
+  .onboarding-card {
+    background: #fff;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  }
+  .onboarding-card h2 {
+    color: #213547;
+  }
+  .onboarding-list {
+    color: #333;
+  }
+}
+
+/* Hint message (auto-check, one at a time) */
+.hint-message {
+  width: 100%;
+  max-width: min(100%, 480px);
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  background: rgba(255, 200, 100, 0.15);
+  color: #e6b800;
+  border: 1px solid rgba(230, 184, 0, 0.4);
+  border-radius: 10px;
+  font-size: 0.95rem;
+  text-align: center;
+  box-sizing: border-box;
+}
+
+@media (prefers-color-scheme: light) {
+  .hint-message {
+    background: rgba(200, 150, 0, 0.12);
+    color: #8b6914;
+    border-color: rgba(139, 105, 20, 0.35);
+  }
+}
+
 .error-banner {
   width: 100%;
   max-width:  min(100%, 480px);
