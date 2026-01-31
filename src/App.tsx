@@ -5,7 +5,24 @@ import {
 } from './pose/poseRunner'
 import type { FrameQualityHint } from './pose/frameQuality'
 import { MetricsSession, type MetricsSnapshot } from './pose/metrics'
+import {
+  requestScreenWakeLock,
+  releaseScreenWakeLock,
+  type WakeLockSentinelLike,
+} from './wakeLock'
+import {
+  computeSummary,
+  generateInsights,
+  addSession,
+  updateSessionNote,
+  deleteSession,
+  loadSessions,
+  type SessionSummary,
+  type SessionSample,
+} from './sessionSummary'
 import './App.css'
+
+export type ViewMode = 'live' | 'summary' | 'history'
 
 const METRICS_UPDATE_INTERVAL_MS = 500
 
@@ -73,8 +90,13 @@ function App() {
   const baselineRef = useRef<Baseline | null>(null)
   const metricsSessionRef = useRef<MetricsSession | null>(null)
   const trackingStartTimeRef = useRef<number>(0)
+  const wakeLockSentinelRef = useRef<WakeLockSentinelLike | null>(null)
+  const isRunningRef = useRef(false)
+  const sessionSamplesRef = useRef<SessionSample[]>([])
+  const frameQualityRef = useRef<number | null>(null)
 
   const [isRunning, setIsRunning] = useState(false)
+  const [wakeLockActive, setWakeLockActive] = useState(false)
   const [phase, setPhase] = useState<Phase>('idle')
   const [error, setError] = useState<string | null>(null)
   const [fps, setFps] = useState(0)
@@ -89,14 +111,72 @@ function App() {
   const [metricsSnapshot, setMetricsSnapshot] = useState<MetricsSnapshot | null>(null)
   const [trackingTimeMs, setTrackingTimeMs] = useState(0)
   const [debugMetricsOpen, setDebugMetricsOpen] = useState(false)
+  const [view, setView] = useState<ViewMode>('live')
+  const [currentSummary, setCurrentSummary] = useState<SessionSummary | null>(null)
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
+  const [summaryNote, setSummaryNote] = useState('')
+  const [sessions, setSessions] = useState<SessionSummary[]>(() => loadSessions())
 
   useEffect(() => {
     phaseRef.current = phase
   }, [phase])
 
   useEffect(() => {
+    isRunningRef.current = isRunning
+  }, [isRunning])
+
+  useEffect(() => {
     baselineRef.current = baseline
   }, [baseline])
+
+  useEffect(() => {
+    frameQualityRef.current = frameQuality
+  }, [frameQuality])
+
+  const requestWakeLock = useCallback(async () => {
+    const s = await requestScreenWakeLock()
+    if (s) {
+      wakeLockSentinelRef.current = s
+      setWakeLockActive(true)
+      s.addEventListener('release', () => {
+        wakeLockSentinelRef.current = null
+        setWakeLockActive(false)
+      })
+    }
+  }, [])
+
+  const releaseWakeLock = useCallback(() => {
+    releaseScreenWakeLock(wakeLockSentinelRef.current, () => {
+      wakeLockSentinelRef.current = null
+      setWakeLockActive(false)
+    })
+  }, [])
+
+  useEffect(() => {
+    const needLock = isRunning && (phase === 'calibrating' || phase === 'tracking')
+    if (needLock) {
+      if (!wakeLockSentinelRef.current) requestWakeLock()
+    } else {
+      releaseWakeLock()
+    }
+  }, [isRunning, phase, requestWakeLock, releaseWakeLock])
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState !== 'visible') return
+      if (isRunningRef.current && (phaseRef.current === 'calibrating' || phaseRef.current === 'tracking') && !wakeLockSentinelRef.current) {
+        requestWakeLock()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => document.removeEventListener('visibilitychange', handleVisibility)
+  }, [requestWakeLock])
+
+  useEffect(() => {
+    return () => {
+      releaseScreenWakeLock(wakeLockSentinelRef.current, () => {})
+    }
+  }, [])
 
   const updateHintMessage = useCallback(
     (desired: string | null, now: number) => {
@@ -228,6 +308,7 @@ function App() {
     lastMessageTimeRef.current = 0
     displayedMessageRef.current = null
     setHintMessage(null)
+    sessionSamplesRef.current = []
 
     await startPoseRunner(video, canvas, {
       onStatus: (f, p, q, h) => {
@@ -248,6 +329,10 @@ function App() {
   }, [handleCalibrationFrame, handleTrackingFrame])
 
   const handleStop = useCallback(async () => {
+    const endTime = performance.now()
+    const startTime = trackingStartTimeRef.current
+    const samples = [...sessionSamplesRef.current]
+
     await stopPoseRunner()
     setIsRunning(false)
     setPhase('idle')
@@ -265,6 +350,23 @@ function App() {
     setTrackingTimeMs(0)
     metricsSessionRef.current = null
     displayedMessageRef.current = null
+    sessionSamplesRef.current = []
+
+    if (samples.length > 0) {
+      const base = computeSummary(samples, startTime, endTime)
+      const voValues = samples.map((s) => s.voProxy)
+      const insights = generateInsights(base, voValues)
+      const dateISO = new Date().toISOString()
+      const saved = addSession(
+        { ...base, dateISO, insights },
+        ''
+      )
+      setCurrentSummary(saved)
+      setSummaryNote(saved.note)
+      setSelectedSessionId(null)
+      setView('summary')
+      setSessions(loadSessions())
+    }
   }, [])
 
   const handleRecalibrate = useCallback(() => {
@@ -289,7 +391,14 @@ function App() {
       const now = performance.now()
       const session = metricsSessionRef.current
       if (session) {
-        setMetricsSnapshot(session.getSnapshot(now))
+        const snap = session.getSnapshot(now)
+        setMetricsSnapshot(snap)
+        sessionSamplesRef.current.push({
+          t: now,
+          cadence: snap.cadence,
+          voProxy: snap.voProxy,
+          quality: frameQualityRef.current ?? 0,
+        })
       }
       setTrackingTimeMs(Math.max(0, now - trackingStartTimeRef.current))
     }, METRICS_UPDATE_INTERVAL_MS)
@@ -306,6 +415,57 @@ function App() {
     setShowOnboarding(true)
   }, [])
 
+  const handleNewSession = useCallback(() => {
+    setView('live')
+    setCurrentSummary(null)
+    setSelectedSessionId(null)
+    setSummaryNote('')
+  }, [])
+
+  const handleBackToLive = useCallback(() => {
+    setView('live')
+    setSelectedSessionId(null)
+  }, [])
+
+  const handleSaveNote = useCallback(() => {
+    const id = selectedSessionId ?? currentSummary?.id
+    if (id) {
+      updateSessionNote(id, summaryNote)
+      setSessions(loadSessions())
+      setCurrentSummary((prev) => (prev?.id === id ? { ...prev, note: summaryNote } : prev))
+    }
+  }, [selectedSessionId, currentSummary?.id, summaryNote])
+
+  const handleOpenHistorySession = useCallback((id: string) => {
+    const session = loadSessions().find((s) => s.id === id)
+    if (session) {
+      setSelectedSessionId(id)
+      setCurrentSummary(session)
+      setSummaryNote(session.note)
+      setView('summary')
+    }
+  }, [])
+
+  const handleDeleteSession = useCallback((id: string) => {
+    deleteSession(id)
+    setSessions(loadSessions())
+    if (selectedSessionId === id) {
+      setView('history')
+      setCurrentSummary(null)
+      setSelectedSessionId(null)
+    } else if (currentSummary?.id === id) {
+      setCurrentSummary(null)
+      setView('live')
+    }
+  }, [selectedSessionId, currentSummary?.id])
+
+  const displayedSummary: SessionSummary | null =
+    view === 'summary'
+      ? selectedSessionId
+        ? sessions.find((s) => s.id === selectedSessionId) ?? currentSummary
+        : currentSummary
+      : null
+
   const calibrationSecondsRemaining = Math.max(
     0,
     5 - Math.floor(goodTimeMs / 1000)
@@ -316,22 +476,130 @@ function App() {
   const trackingSs = Math.floor((trackingTimeMs % 60_000) / 1000)
   const trackingTimeLabel = `${String(trackingMm).padStart(2, '0')}:${String(trackingSs).padStart(2, '0')}`
 
+  const formatSessionDate = (dateISO: string) => {
+    const d = new Date(dateISO)
+    return d.toLocaleDateString('da-DK', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  }
+
+  const formatDuration = (sec: number) => {
+    const m = Math.floor(sec / 60)
+    const s = sec % 60
+    return `${m}:${String(s).padStart(2, '0')}`
+  }
+
   return (
     <div className="app" ref={containerRef}>
       <header className="header">
         <h1>RunForm PoC</h1>
-        <button
-          type="button"
-          className="link-setup"
-          onClick={openOnboarding}
-          aria-label="Vis opsætningsvejledning"
-        >
-          Vis opsætningsvejledning
-        </button>
+        {wakeLockActive && view === 'live' && (
+          <span className="wake-lock-status" role="status">
+            Skærm holdes aktiv
+          </span>
+        )}
+        {view === 'live' && (
+          <button
+            type="button"
+            className="link-header"
+            onClick={() => {
+              setView('history')
+              setSessions(loadSessions())
+            }}
+          >
+            Historik
+          </button>
+        )}
       </header>
 
-      {showOnboarding && (
-        <div className="onboarding-overlay" role="dialog" aria-labelledby="onboarding-title">
+      {view === 'history' && (
+        <div className="summary-view">
+          <h2 className="summary-section-title">Seneste sessioner</h2>
+          <ul className="history-list">
+            {sessions.slice(0, 10).map((s) => (
+              <li key={s.id} className="history-item">
+                <button
+                  type="button"
+                  className="history-item-btn"
+                  onClick={() => handleOpenHistorySession(s.id)}
+                >
+                  <span className="history-item-date">{formatSessionDate(s.dateISO)}</span>
+                  <span className="history-item-dur">{formatDuration(s.durationSec)}</span>
+                </button>
+                <button
+                  type="button"
+                  className="history-item-delete"
+                  onClick={() => handleDeleteSession(s.id)}
+                  aria-label="Slet session"
+                >
+                  Slet
+                </button>
+              </li>
+            ))}
+          </ul>
+          {sessions.length === 0 && (
+            <p className="history-empty">Ingen sessioner endnu.</p>
+          )}
+          <button type="button" className="btn btn-secondary" onClick={() => setView('live')}>
+            Tilbage
+          </button>
+        </div>
+      )}
+
+      {view === 'summary' && displayedSummary && (
+        <div className="summary-view">
+          <section className="summary-card">
+            <h2 className="summary-section-title">Session</h2>
+            <p className="summary-meta">
+              {formatSessionDate(displayedSummary.dateISO)} · {formatDuration(displayedSummary.durationSec)}
+            </p>
+            <h2 className="summary-section-title">Nøgletal</h2>
+            <div className="summary-stats">
+              <span>Cadence: {displayedSummary.cadenceAvg} spm</span>
+              <span>Stability: {displayedSummary.stabilityStdDev} spm</span>
+              <span>VO proxy: {displayedSummary.voMedian.toFixed(3)} rel</span>
+              <span>Pålidelighed: {displayedSummary.reliability}</span>
+            </div>
+            <h2 className="summary-section-title">Indsigt</h2>
+            <ul className="summary-insights">
+              {displayedSummary.insights.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+            <p className="summary-disclaimer">
+              Prototype. Kun generel feedback. Ingen diagnoser.
+            </p>
+            <label className="summary-note-label">
+              Note
+              <textarea
+                className="summary-note-input"
+                value={summaryNote}
+                onChange={(e) => setSummaryNote(e.target.value)}
+                placeholder="Valgfri note..."
+                rows={2}
+              />
+            </label>
+            <button type="button" className="btn btn-primary" onClick={handleSaveNote}>
+              Gem note
+            </button>
+            <div className="summary-actions">
+              <button type="button" className="btn btn-secondary" onClick={handleNewSession}>
+                Ny session
+              </button>
+              <button type="button" className="btn btn-secondary" onClick={handleBackToLive}>
+                Tilbage til live
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {view === 'live' && showOnboarding && (
+        <div className="onboarding-overlay"  role="dialog" aria-labelledby="onboarding-title">
           <div className="onboarding-card">
             <h2 id="onboarding-title">Sådan får du bedst resultat</h2>
             <ul className="onboarding-list">
@@ -351,13 +619,13 @@ function App() {
         </div>
       )}
 
-      {error && (
+      {view === 'live' && error && (
         <div className="error-banner" role="alert">
           <strong>Fejl:</strong> {error}
         </div>
       )}
 
-      {phase === 'calibrating' && (
+      {view === 'live' && phase === 'calibrating' && (
         <div className="calibration-panel" role="status">
           <div className="calibration-countdown">
             {calibrationSecondsRemaining}
@@ -376,59 +644,24 @@ function App() {
         </div>
       )}
 
-      {phase === 'tracking' && (
+      {view === 'live' && phase === 'tracking' && (
         <>
-          <div className="baseline-locked" role="status">
+          <div className="baseline-locked baseline-locked-minimal" role="status">
             <span className="baseline-locked-label">Baseline locked</span>
-            {baseline != null && (
-              <div className="debug-panel">
-                <span>hipY: {baseline.hipY.toFixed(3)}</span>
-                <span>torsoY: {baseline.torsoY.toFixed(3)}</span>
-              </div>
-            )}
           </div>
-          <div className="metrics-panel" role="region" aria-label="Målinger">
-            <div className="metrics-row">
-              <div className="metric-block">
-                <span className="metric-value">{metricsSnapshot?.cadence ?? '–'}</span>
-                <span className="metric-unit">spm</span>
-                <span className="metric-label">Cadence</span>
-              </div>
-              <div className="metric-block">
-                <span className="metric-value">{metricsSnapshot != null ? metricsSnapshot.voProxy.toFixed(3) : '–'}</span>
-                <span className="metric-unit">rel</span>
-                <span className="metric-label">VO proxy</span>
-              </div>
-              <div className="metric-block">
-                <span className="metric-value">{metricsSnapshot?.stability ?? '–'}</span>
-                <span className="metric-unit">spm</span>
-                <span className="metric-label">Stability</span>
-              </div>
-            </div>
-            <div className="metrics-tracking-time">
-              <span className="metric-label">Tracking</span>
+          <div className="metrics-panel metrics-panel-minimal" role="region" aria-label="Live">
+            <div className="metrics-minimal">
               <span className="metric-value">{trackingTimeLabel}</span>
+              <span className="metric-label">Tid</span>
+              <span className="metric-value">{metricsSnapshot?.cadence ?? '–'}</span>
+              <span className="metric-label">Cadence spm</span>
             </div>
-            <button
-              type="button"
-              className="debug-toggle"
-              onClick={() => setDebugMetricsOpen((o) => !o)}
-              aria-expanded={debugMetricsOpen}
-            >
-              {debugMetricsOpen ? 'Skjul debug' : 'Vis debug'}
-            </button>
-            {debugMetricsOpen && metricsSnapshot != null && (
-              <div className="metrics-debug">
-                <span>steps_last_10s: {metricsSnapshot.stepsLast10s}</span>
-                <span>ankle: {metricsSnapshot.currentAnkle === 'L' ? 'L' : 'R'}</span>
-              </div>
-            )}
-            <p className="metrics-disclaimer">Prototype. Kun generel feedback.</p>
           </div>
         </>
       )}
 
-      <div className="preview-wrapper">
+      {view === 'live' && (
+        <div className="preview-wrapper">
         <video
           ref={videoRef}
           className="preview-video"
@@ -450,9 +683,11 @@ function App() {
             <p>Tryk Start for at bruge frontkamera og pose-detektion</p>
           </div>
         )}
-      </div>
+        </div>
+      )}
 
-      <div className="status">
+      {view === 'live' && (
+        <div className="status">
         <span className="status-item">FPS: {fps}</span>
         <span className="status-item">
           Pose: {poseDetected ? 'ja' : 'nej'}
@@ -462,9 +697,10 @@ function App() {
             Frame quality: {frameQuality}/100
           </span>
         )}
-      </div>
+        </div>
+      )}
 
-      {hintMessage && (
+      {view === 'live' && hintMessage && (
         <div className="hint-message" role="status">
           {hintMessage}
         </div>
@@ -496,7 +732,19 @@ function App() {
         >
           Stop
         </button>
-      </div>
+        </div>
+      )}
+      <footer className="app-footer">
+        <button
+          type="button"
+          className="link-footer"
+          onClick={openOnboarding}
+          aria-label="Vis opsætningsvejledning"
+        >
+          Vis opsætningsvejledning
+        </button>
+        <p className="footer-disclaimer">Prototype. Kun generel feedback.</p>
+      </footer>
     </div>
   )
 }
