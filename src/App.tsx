@@ -25,6 +25,7 @@ import {
 } from './sessionSummary'
 import { Sparkline } from './Sparkline'
 import { affiliateLinks, recordAffiliateClick, type AffiliateLinkId } from './affiliatelinks'
+import { saveFeedback, hasFeedbackForSession } from './feedback'
 import './App.css'
 
 export type ViewMode = 'live' | 'summary' | 'history'
@@ -136,6 +137,8 @@ function App() {
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
   const [activeTooltipId, setActiveTooltipId] = useState<string | null>(null)
   const [legalModal, setLegalModal] = useState<null | 'disclaimer' | 'terms' | 'privacy' | 'coc'>(null)
+  const [shareLinkFeedback, setShareLinkFeedback] = useState<string | null>(null)
+  const [feedbackSubmittedSessionId, setFeedbackSubmittedSessionId] = useState<string | null>(null)
 
   useEffect(() => {
     phaseRef.current = phase
@@ -613,6 +616,32 @@ function App() {
     recordAffiliateClick(linkId)
   }, [])
 
+  const handleShareLink = useCallback(() => {
+    if (typeof navigator?.clipboard?.writeText !== 'function') return
+    navigator.clipboard.writeText(window.location.href).then(
+      () => {
+        setShareLinkFeedback('Link kopieret')
+        setTimeout(() => setShareLinkFeedback(null), 2000)
+      },
+      () => {}
+    )
+  }, [])
+
+  const handleFeedback = useCallback((value: 'up' | 'down', sessionId: string, metrics: { cadenceAvg: number; stabilityStdDev: number; voMedian: number; reliability: string }) => {
+    saveFeedback({
+      timestamp: new Date().toISOString(),
+      sessionId,
+      value,
+      metrics: {
+        cadenceAvg: metrics.cadenceAvg,
+        stabilityStdDev: metrics.stabilityStdDev,
+        voMedian: metrics.voMedian,
+        reliability: metrics.reliability,
+      },
+    })
+    setFeedbackSubmittedSessionId(sessionId)
+  }, [])
+
   const handleExportJson = useCallback(() => {
     const s = displayedSummaryRef.current
     if (!s) return
@@ -873,6 +902,58 @@ function App() {
                   <span className="affiliate-card-title">Komfort før og efter løb</span>
                   <span className="affiliate-card-text">Behageligt fodtøj kan være rart i hverdagen</span>
                 </a>
+              </div>
+            </section>
+
+            <section className="summary-share-feedback" aria-label="Del og feedback">
+              <div className="share-feedback-row">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-share-link"
+                  onClick={handleShareLink}
+                >
+                  Del link
+                </button>
+                {shareLinkFeedback && (
+                  <span className="share-link-confirm" role="status">
+                    {shareLinkFeedback}
+                  </span>
+                )}
+              </div>
+              <div className="feedback-block">
+                <p className="feedback-question">Var denne analyse nyttig?</p>
+                {(feedbackSubmittedSessionId === displayedSummary.id || hasFeedbackForSession(displayedSummary.id)) ? (
+                  <p className="feedback-thanks">Tak for feedback</p>
+                ) : (
+                  <div className="feedback-buttons">
+                    <button
+                      type="button"
+                      className="btn btn-feedback btn-feedback-up"
+                      onClick={() => handleFeedback('up', displayedSummary.id, {
+                        cadenceAvg: displayedSummary.cadenceAvg,
+                        stabilityStdDev: displayedSummary.stabilityStdDev,
+                        voMedian: displayedSummary.voMedian,
+                        reliability: displayedSummary.reliability,
+                      })}
+                      aria-label="Ja, nyttig"
+                    >
+                      👍 Ja
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-feedback btn-feedback-down"
+                      onClick={() => handleFeedback('down', displayedSummary.id, {
+                        cadenceAvg: displayedSummary.cadenceAvg,
+                        stabilityStdDev: displayedSummary.stabilityStdDev,
+                        voMedian: displayedSummary.voMedian,
+                        reliability: displayedSummary.reliability,
+                      })}
+                      aria-label="Nej, ikke nyttig"
+                    >
+                      👎 Nej
+                    </button>
+                  </div>
+                )}
               </div>
             </section>
 
