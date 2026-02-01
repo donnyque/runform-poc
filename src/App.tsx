@@ -134,6 +134,7 @@ function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>(() => loadSessions())
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
   const [activeTooltipId, setActiveTooltipId] = useState<string | null>(null)
+  const [legalModal, setLegalModal] = useState<null | 'disclaimer' | 'terms' | 'privacy' | 'coc'>(null)
 
   useEffect(() => {
     phaseRef.current = phase
@@ -833,7 +834,10 @@ function App() {
               ))}
             </ul>
             <p className="summary-disclaimer">
-              Prototype til generel løbe-feedback. Ingen diagnoser.
+              Prototype til generel løbe-feedback.{' '}
+              <button type="button" className="link-inline" onClick={() => setLegalModal('disclaimer')}>
+                Se Disclaimer
+              </button>
             </p>
             <label className="summary-note-label">
               Note
@@ -1109,6 +1113,23 @@ function App() {
         </div>
       )}
       <footer className="app-footer">
+        <span className="footer-links">
+          <button type="button" className="link-footer" onClick={() => setLegalModal('disclaimer')}>
+            Disclaimer
+          </button>
+          <span className="footer-sep" aria-hidden> · </span>
+          <button type="button" className="link-footer" onClick={() => setLegalModal('terms')}>
+            Vilkår
+          </button>
+          <span className="footer-sep" aria-hidden> · </span>
+          <button type="button" className="link-footer" onClick={() => setLegalModal('privacy')}>
+            Privatliv
+          </button>
+          <span className="footer-sep" aria-hidden> · </span>
+          <button type="button" className="link-footer" onClick={() => setLegalModal('coc')}>
+            Code of Conduct
+          </button>
+        </span>
         <button
           type="button"
           className="link-footer"
@@ -1117,8 +1138,78 @@ function App() {
         >
           Vis opsætningsvejledning
         </button>
-        <p className="footer-disclaimer">Prototype til generel løbe-feedback. Ingen diagnoser.</p>
       </footer>
+
+      {legalModal && (
+        <div
+          className="legal-modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="legal-modal-title"
+          onClick={() => setLegalModal(null)}
+        >
+          <div
+            className="legal-modal"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="legal-modal-title" className="legal-modal-title">
+              {legalModal === 'disclaimer' && 'Disclaimer'}
+              {legalModal === 'terms' && 'Vilkår for brug'}
+              {legalModal === 'privacy' && 'Privatliv'}
+              {legalModal === 'coc' && 'Code of Conduct'}
+            </h2>
+            <button
+              type="button"
+              className="legal-modal-close"
+              onClick={() => setLegalModal(null)}
+              aria-label="Luk"
+            >
+              ✕
+            </button>
+            <div className="legal-modal-content">
+              {legalModal === 'disclaimer' && (
+                <>
+                  <p>RunForm er en prototype, der giver generel, ikke-personlig feedback baseret på videoanalyse.</p>
+                  <p>Oplysninger og resultater fra RunForm er ikke medicinsk rådgivning, udgør ingen diagnose og må ikke bruges som grundlag for behandling, skadeforebyggelse eller sundhedsmæssige beslutninger.</p>
+                  <p>Brug af RunForm sker på eget ansvar. Resultater kan variere afhængigt af lys, kameravinkel, afstand og brugerens bevægelse.</p>
+                </>
+              )}
+              {legalModal === 'terms' && (
+                <>
+                  <p>Ved at bruge RunForm accepterer du følgende:</p>
+                  <ul>
+                    <li>RunForm leveres &apos;som den er&apos; uden garanti for nøjagtighed eller tilgængelighed.</li>
+                    <li>Du er selv ansvarlig for, hvordan du bruger feedback og resultater.</li>
+                    <li>RunForm kan ændres, pauses eller fjernes uden varsel.</li>
+                    <li>Misbrug eller forsøg på at omgå systemets begrænsninger er ikke tilladt.</li>
+                  </ul>
+                </>
+              )}
+              {legalModal === 'privacy' && (
+                <>
+                  <p>RunForm respekterer dit privatliv.</p>
+                  <ul>
+                    <li>Video behandles udelukkende lokalt i din browser og uploades ikke.</li>
+                    <li>Sessioner gemmes lokalt på din enhed (localStorage).</li>
+                    <li>Der indsamles ingen personhenførbare data, medmindre du aktivt indtaster dem.</li>
+                    <li>Der anvendes ikke cookies til sporing eller annoncering.</li>
+                  </ul>
+                </>
+              )}
+              {legalModal === 'coc' && (
+                <>
+                  <p>RunForm skal bruges respektfuldt.</p>
+                  <ul>
+                    <li>Brug kun appen på dig selv eller med samtykke.</li>
+                    <li>Ingen chikane, misbrug eller forsøg på at udnytte systemet.</li>
+                    <li>Respektér, at RunForm er et teknisk værktøj – ikke en vurdering af menneskers kroppe eller værd.</li>
+                  </ul>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
