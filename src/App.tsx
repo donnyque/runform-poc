@@ -24,6 +24,7 @@ import {
   type SessionSample,
 } from './sessionSummary'
 import { Sparkline } from './Sparkline'
+import { affiliateLinks, recordAffiliateClick, type AffiliateLinkId } from './affiliatelinks'
 import './App.css'
 
 export type ViewMode = 'live' | 'summary' | 'history'
@@ -606,6 +607,12 @@ function App() {
         }
       : null
 
+  const handleAffiliateClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, linkId: AffiliateLinkId) => {
+    e.preventDefault()
+    console.log('Affiliate click:', linkId)
+    recordAffiliateClick(linkId)
+  }, [])
+
   const handleExportJson = useCallback(() => {
     const s = displayedSummaryRef.current
     if (!s) return
@@ -833,6 +840,42 @@ function App() {
                 <li key={i}>{line}</li>
               ))}
             </ul>
+
+            <section className="affiliate-section" aria-label="Forslag til udstyr">
+              <h2 className="summary-section-title">Udstyr, der kan passe til din løbestil</h2>
+              <p className="affiliate-subtitle">Generelle forslag baseret på din session</p>
+              <div className="affiliate-cards">
+                {(displayedSummary.cadenceAvg < 155 || displayedSummary.voMedian >= 0.015) && (
+                  <a
+                    href={affiliateLinks.liiteguard.tights}
+                    className="affiliate-card"
+                    onClick={(e) => handleAffiliateClick(e, 'liiteguard.tights')}
+                  >
+                    <span className="affiliate-card-title">Komfort og støtte til løb</span>
+                    <span className="affiliate-card-text">Mere støtte og komfort kan føles mere afslappet</span>
+                  </a>
+                )}
+                {displayedSummary.stabilityStdDev <= 4 && (
+                  <a
+                    href={affiliateLinks.liiteguard.socks}
+                    className="affiliate-card"
+                    onClick={(e) => handleAffiliateClick(e, 'liiteguard.socks')}
+                  >
+                    <span className="affiliate-card-title">Let og fleksibelt løbetøj</span>
+                    <span className="affiliate-card-text">Stabil rytme passer ofte godt til let udstyr</span>
+                  </a>
+                )}
+                <a
+                  href={affiliateLinks.workwalk.shoes}
+                  className="affiliate-card"
+                  onClick={(e) => handleAffiliateClick(e, 'workwalk.shoes')}
+                >
+                  <span className="affiliate-card-title">Komfort før og efter løb</span>
+                  <span className="affiliate-card-text">Behageligt fodtøj kan være rart i hverdagen</span>
+                </a>
+              </div>
+            </section>
+
             <p className="summary-disclaimer">
               Prototype til generel løbe-feedback.{' '}
               <button type="button" className="link-inline" onClick={() => setLegalModal('disclaimer')}>
