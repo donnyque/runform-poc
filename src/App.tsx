@@ -24,7 +24,7 @@ import {
   type SessionSample,
 } from './sessionSummary'
 import { Sparkline } from './Sparkline'
-import { affiliateLinks, recordAffiliateClick } from './affiliatelinks'
+import { openAffiliate, getAffiliateDomain } from './affiliatelinks'
 import { saveFeedback, hasFeedbackForSession } from './feedback'
 import './App.css'
 
@@ -884,54 +884,50 @@ function App() {
                 <div className="affiliate-card">
                   <span className="affiliate-card-title">Komfort og støtte til løb</span>
                   <span className="affiliate-card-text">Mere støtte og komfort kan føles mere afslappet</span>
-                  <a
-                    href={affiliateLinks.liiteguard.tights}
+                  <button
+                    type="button"
                     className="affiliate-card-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => recordAffiliateClick('liiteguard.tights')}
+                    onClick={() => openAffiliate('liiteguard.tights')}
                   >
                     Se muligheder
-                  </a>
+                  </button>
+                  <span className="affiliate-debug-domain">{getAffiliateDomain('liiteguard.tights')}</span>
                 </div>
                 <div className="affiliate-card">
                   <span className="affiliate-card-title">Let og fleksibelt løbetøj</span>
                   <span className="affiliate-card-text">Stabil rytme passer ofte godt til let udstyr</span>
-                  <a
-                    href={affiliateLinks.liiteguard.socks}
+                  <button
+                    type="button"
                     className="affiliate-card-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => recordAffiliateClick('liiteguard.socks')}
+                    onClick={() => openAffiliate('liiteguard.socks')}
                   >
                     Se muligheder
-                  </a>
+                  </button>
+                  <span className="affiliate-debug-domain">{getAffiliateDomain('liiteguard.socks')}</span>
                 </div>
                 <div className="affiliate-card">
                   <span className="affiliate-card-title">Fusion running</span>
                   <span className="affiliate-card-text">Løbeklæder til træning og hverdag</span>
-                  <a
-                    href={affiliateLinks.fusion.apparel}
+                  <button
+                    type="button"
                     className="affiliate-card-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => recordAffiliateClick('fusion.apparel')}
+                    onClick={() => openAffiliate('fusion.apparel')}
                   >
                     Se muligheder
-                  </a>
+                  </button>
+                  <span className="affiliate-debug-domain">{getAffiliateDomain('fusion.apparel')}</span>
                 </div>
                 <div className="affiliate-card">
                   <span className="affiliate-card-title">Komfort før og efter løb</span>
                   <span className="affiliate-card-text">Behageligt fodtøj kan være rart i hverdagen</span>
-                  <a
-                    href={affiliateLinks.workwalk.treadmill}
+                  <button
+                    type="button"
                     className="affiliate-card-link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => recordAffiliateClick('workwalk.treadmill')}
+                    onClick={() => openAffiliate('workwalk.treadmill')}
                   >
                     Se muligheder
-                  </a>
+                  </button>
+                  <span className="affiliate-debug-domain">{getAffiliateDomain('workwalk.treadmill')}</span>
                 </div>
               </div>
             </section>
@@ -1216,41 +1212,38 @@ function App() {
             <div className="front-sponsored-card">
               <span className="front-sponsored-brand">Liiteguard</span>
               <span className="front-sponsored-text">Performance og komfort til træning</span>
-              <a
-                href={affiliateLinks.liiteguard.tights}
+              <button
+                type="button"
                 className="front-sponsored-btn"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => recordAffiliateClick('liiteguard.tights')}
+                onClick={() => openAffiliate('liiteguard.tights')}
               >
                 Se udstyr
-              </a>
+              </button>
+              <span className="affiliate-debug-domain">{getAffiliateDomain('liiteguard.tights')}</span>
             </div>
             <div className="front-sponsored-card">
               <span className="front-sponsored-brand">Fusion</span>
               <span className="front-sponsored-text">Teknisk løbetøj til løb</span>
-              <a
-                href={affiliateLinks.fusion.apparel}
+              <button
+                type="button"
                 className="front-sponsored-btn"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => recordAffiliateClick('fusion.apparel')}
+                onClick={() => openAffiliate('fusion.apparel')}
               >
                 Se udstyr
-              </a>
+              </button>
+              <span className="affiliate-debug-domain">{getAffiliateDomain('fusion.apparel')}</span>
             </div>
             <div className="front-sponsored-card">
               <span className="front-sponsored-brand">Workwalk</span>
               <span className="front-sponsored-text">Komfort i hverdagen og restitution</span>
-              <a
-                href={affiliateLinks.workwalk.treadmill}
+              <button
+                type="button"
                 className="front-sponsored-btn"
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => recordAffiliateClick('workwalk.treadmill')}
+                onClick={() => openAffiliate('workwalk.treadmill')}
               >
                 Se udstyr
-              </a>
+              </button>
+              <span className="affiliate-debug-domain">{getAffiliateDomain('workwalk.treadmill')}</span>
             </div>
           </div>
           <div className="front-lead">

@@ -25,6 +25,36 @@ export type AffiliateLinkId =
   | "workwalk.treadmill"
   | "fusion.apparel";
 
+const ID_TO_URL: Record<AffiliateLinkId, string> = {
+  "liiteguard.tights": affiliateLinks.liiteguard.tights,
+  "liiteguard.socks": affiliateLinks.liiteguard.socks,
+  "fusion.apparel": affiliateLinks.fusion.apparel,
+  "workwalk.treadmill": affiliateLinks.workwalk.treadmill,
+};
+
+/**
+ * Returns the URL for an affiliate link id. Throws and logs if id is unknown.
+ */
+export function getAffiliateUrl(linkId: AffiliateLinkId): string {
+  const url = ID_TO_URL[linkId];
+  if (!url) {
+    console.error("Unknown affiliate id:", linkId);
+    throw new Error(`Unknown affiliate id: ${linkId}`);
+  }
+  return url;
+}
+
+/**
+ * Returns the hostname of the affiliate URL for debug display (e.g. "partner-ads.com").
+ */
+export function getAffiliateDomain(linkId: AffiliateLinkId): string {
+  try {
+    return new URL(getAffiliateUrl(linkId)).hostname;
+  } catch {
+    return "";
+  }
+}
+
 const AFFILIATE_CLICKS_KEY = "runform-poc-affiliate-clicks";
 
 export function recordAffiliateClick(linkId: AffiliateLinkId): void {
@@ -35,5 +65,17 @@ export function recordAffiliateClick(linkId: AffiliateLinkId): void {
     localStorage.setItem(AFFILIATE_CLICKS_KEY, JSON.stringify(arr));
   } catch {
     // ignore
+  }
+}
+
+/**
+ * Records click and opens affiliate URL in new tab. Falls back to same tab if popup blocked.
+ */
+export function openAffiliate(linkId: AffiliateLinkId): void {
+  recordAffiliateClick(linkId);
+  const url = getAffiliateUrl(linkId);
+  const w = window.open(url, "_blank", "noopener,noreferrer");
+  if (w == null) {
+    window.location.href = url;
   }
 }

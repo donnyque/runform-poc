@@ -1156,10 +1156,23 @@
   color: #94a3b8;
   text-decoration: underline;
   -webkit-tap-highlight-color: transparent;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .front-sponsored-btn:hover {
   color: #e2e8f0;
+}
+
+/* Temporary debug: resolved affiliate domain under each button */
+.affiliate-debug-domain {
+  display: block;
+  margin-top: 0.1rem;
+  font-size: 0.6rem;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.4);
 }
 
 .front-lead {
@@ -1286,6 +1299,10 @@
   color: #94a3b8;
   text-decoration: underline;
   -webkit-tap-highlight-color: transparent;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 .affiliate-card-link:hover {
@@ -1329,6 +1346,9 @@
   }
   .affiliate-card-link:hover {
     color: #1d4ed8;
+  }
+  .affiliate-debug-domain {
+    color: rgba(0, 0, 0, 0.35);
   }
 }
 
