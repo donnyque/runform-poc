@@ -24,7 +24,7 @@ import {
   type SessionSample,
 } from './sessionSummary'
 import { Sparkline } from './Sparkline'
-import { affiliateLinks, recordAffiliateClick, type AffiliateLinkId } from './affiliatelinks'
+import { affiliateLinks, recordAffiliateClick } from './affiliatelinks'
 import { saveFeedback, hasFeedbackForSession } from './feedback'
 import './App.css'
 
@@ -139,6 +139,8 @@ function App() {
   const [legalModal, setLegalModal] = useState<null | 'disclaimer' | 'terms' | 'privacy' | 'coc'>(null)
   const [shareLinkFeedback, setShareLinkFeedback] = useState<string | null>(null)
   const [feedbackSubmittedSessionId, setFeedbackSubmittedSessionId] = useState<string | null>(null)
+  const [leadEmail, setLeadEmail] = useState('')
+  const [leadSubmitted, setLeadSubmitted] = useState(false)
 
   useEffect(() => {
     phaseRef.current = phase
@@ -610,11 +612,16 @@ function App() {
         }
       : null
 
-  const handleAffiliateClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>, linkId: AffiliateLinkId) => {
-    e.preventDefault()
-    console.log('Affiliate click:', linkId)
-    recordAffiliateClick(linkId)
-  }, [])
+  const handleLeadSubmit = useCallback(() => {
+    const email = leadEmail.trim()
+    if (!email) return
+    try {
+      localStorage.setItem('runformLeadEmail', email)
+      setLeadSubmitted(true)
+    } catch {
+      // ignore
+    }
+  }, [leadEmail])
 
   const handleShareLink = useCallback(() => {
     if (typeof navigator?.clipboard?.writeText !== 'function') return
@@ -874,34 +881,58 @@ function App() {
               <h2 className="summary-section-title">Udstyr, der kan passe til din løbestil</h2>
               <p className="affiliate-subtitle">Generelle forslag baseret på din session</p>
               <div className="affiliate-cards">
-                {(displayedSummary.cadenceAvg < 155 || displayedSummary.voMedian >= 0.015) && (
+                <div className="affiliate-card">
+                  <span className="affiliate-card-title">Komfort og støtte til løb</span>
+                  <span className="affiliate-card-text">Mere støtte og komfort kan føles mere afslappet</span>
                   <a
                     href={affiliateLinks.liiteguard.tights}
-                    className="affiliate-card"
-                    onClick={(e) => handleAffiliateClick(e, 'liiteguard.tights')}
+                    className="affiliate-card-link"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => recordAffiliateClick('liiteguard.tights')}
                   >
-                    <span className="affiliate-card-title">Komfort og støtte til løb</span>
-                    <span className="affiliate-card-text">Mere støtte og komfort kan føles mere afslappet</span>
+                    Se muligheder
                   </a>
-                )}
-                {displayedSummary.stabilityStdDev <= 4 && (
+                </div>
+                <div className="affiliate-card">
+                  <span className="affiliate-card-title">Let og fleksibelt løbetøj</span>
+                  <span className="affiliate-card-text">Stabil rytme passer ofte godt til let udstyr</span>
                   <a
                     href={affiliateLinks.liiteguard.socks}
-                    className="affiliate-card"
-                    onClick={(e) => handleAffiliateClick(e, 'liiteguard.socks')}
+                    className="affiliate-card-link"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => recordAffiliateClick('liiteguard.socks')}
                   >
-                    <span className="affiliate-card-title">Let og fleksibelt løbetøj</span>
-                    <span className="affiliate-card-text">Stabil rytme passer ofte godt til let udstyr</span>
+                    Se muligheder
                   </a>
-                )}
-                <a
-                  href={affiliateLinks.workwalk.shoes}
-                  className="affiliate-card"
-                  onClick={(e) => handleAffiliateClick(e, 'workwalk.shoes')}
-                >
+                </div>
+                <div className="affiliate-card">
+                  <span className="affiliate-card-title">Fusion running</span>
+                  <span className="affiliate-card-text">Løbeklæder til træning og hverdag</span>
+                  <a
+                    href={affiliateLinks.fusion.apparel}
+                    className="affiliate-card-link"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => recordAffiliateClick('fusion.apparel')}
+                  >
+                    Se muligheder
+                  </a>
+                </div>
+                <div className="affiliate-card">
                   <span className="affiliate-card-title">Komfort før og efter løb</span>
                   <span className="affiliate-card-text">Behageligt fodtøj kan være rart i hverdagen</span>
-                </a>
+                  <a
+                    href={affiliateLinks.workwalk.treadmill}
+                    className="affiliate-card-link"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => recordAffiliateClick('workwalk.treadmill')}
+                  >
+                    Se muligheder
+                  </a>
+                </div>
               </div>
             </section>
 
@@ -1176,6 +1207,77 @@ function App() {
         <div className="hint-message" role="status">
           {hintMessage}
         </div>
+      )}
+
+      {view === 'live' && phase === 'idle' && (
+        <section className="front-sponsored" aria-label="Udstyr sponsoreret">
+          <h2 className="front-sponsored-title">Udstyr (sponsoreret)</h2>
+          <div className="front-sponsored-cards">
+            <div className="front-sponsored-card">
+              <span className="front-sponsored-brand">Liiteguard</span>
+              <span className="front-sponsored-text">Performance og komfort til træning</span>
+              <a
+                href={affiliateLinks.liiteguard.tights}
+                className="front-sponsored-btn"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => recordAffiliateClick('liiteguard.tights')}
+              >
+                Se udstyr
+              </a>
+            </div>
+            <div className="front-sponsored-card">
+              <span className="front-sponsored-brand">Fusion</span>
+              <span className="front-sponsored-text">Teknisk løbetøj til løb</span>
+              <a
+                href={affiliateLinks.fusion.apparel}
+                className="front-sponsored-btn"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => recordAffiliateClick('fusion.apparel')}
+              >
+                Se udstyr
+              </a>
+            </div>
+            <div className="front-sponsored-card">
+              <span className="front-sponsored-brand">Workwalk</span>
+              <span className="front-sponsored-text">Komfort i hverdagen og restitution</span>
+              <a
+                href={affiliateLinks.workwalk.treadmill}
+                className="front-sponsored-btn"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => recordAffiliateClick('workwalk.treadmill')}
+              >
+                Se udstyr
+              </a>
+            </div>
+          </div>
+          <div className="front-lead">
+            <p className="front-lead-question">Vil du have flere tests og opdateringer?</p>
+            {leadSubmitted ? (
+              <p className="front-lead-thanks">Tak</p>
+            ) : (
+              <>
+                <input
+                  type="email"
+                  className="front-lead-input"
+                  placeholder="Email"
+                  value={leadEmail}
+                  onChange={(e) => setLeadEmail(e.target.value)}
+                  aria-label="Email"
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary front-lead-btn"
+                  onClick={handleLeadSubmit}
+                >
+                  Gem
+                </button>
+              </>
+            )}
+          </div>
+        </section>
       )}
 
       {view === 'live' && (

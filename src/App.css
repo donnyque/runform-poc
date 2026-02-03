@@ -1101,6 +1101,153 @@
   color: rgba(255, 255, 255, 0.9);
 }
 
+/* Front sponsored (idle / før Start) */
+.front-sponsored {
+  width: 100%;
+  max-width: min(100%, 360px);
+  margin-bottom: 0.4rem;
+  flex-shrink: 0;
+  padding: 0.4rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.front-sponsored-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.front-sponsored-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.front-sponsored-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.35rem 0.3rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+.front-sponsored-brand {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.front-sponsored-text {
+  font-size: 0.62rem;
+  line-height: 1.25;
+  color: rgba(255, 255, 255, 0.65);
+}
+
+.front-sponsored-btn {
+  display: inline-block;
+  margin-top: 0.15rem;
+  padding: 0.25rem 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-decoration: underline;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.front-sponsored-btn:hover {
+  color: #e2e8f0;
+}
+
+.front-lead {
+  padding: 0.35rem 0.4rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.front-lead-question {
+  margin: 0 0 0.25rem;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.front-lead-thanks {
+  margin: 0;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.front-lead-input {
+  width: 100%;
+  max-width: 200px;
+  padding: 0.3rem 0.4rem;
+  margin-right: 0.35rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  color: #e2e8f0;
+  box-sizing: border-box;
+}
+
+.front-lead-input::placeholder {
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.front-lead-btn {
+  min-height: 32px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.75rem;
+}
+
+@media (prefers-color-scheme: light) {
+  .front-sponsored {
+    border-top-color: rgba(0, 0, 0, 0.06);
+  }
+  .front-sponsored-title {
+    color: rgba(0, 0, 0, 0.5);
+  }
+  .front-sponsored-card {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.08);
+  }
+  .front-sponsored-brand {
+    color: #1e293b;
+  }
+  .front-sponsored-text {
+    color: #475569;
+  }
+  .front-sponsored-btn {
+    color: #2563eb;
+  }
+  .front-sponsored-btn:hover {
+    color: #1d4ed8;
+  }
+  .front-lead {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.08);
+  }
+  .front-lead-question {
+    color: rgba(0, 0, 0, 0.6);
+  }
+  .front-lead-thanks {
+    color: rgba(0, 0, 0, 0.6);
+  }
+  .front-lead-input {
+    background: #fff;
+    border-color: rgba(0, 0, 0, 0.2);
+    color: #1e293b;
+  }
+  .front-lead-input::placeholder {
+    color: #64748b;
+  }
+}
+
 .affiliate-section {
   margin: 0.5rem 0 0.35rem;
   padding-top: 0.35rem;
@@ -1120,20 +1267,29 @@
 }
 
 .affiliate-card {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   padding: 0.5rem 0.6rem;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
-  text-decoration: none;
-  color: inherit;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.2s, border-color 0.2s;
 }
 
-.affiliate-card:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+.affiliate-card-link {
+  display: inline-block;
+  margin-top: 0.25rem;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #94a3b8;
+  text-decoration: underline;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.affiliate-card-link:hover {
+  color: #e2e8f0;
 }
 
 .affiliate-card-title {
@@ -1162,15 +1318,17 @@
     background: rgba(0, 0, 0, 0.04);
     border-color: rgba(0, 0, 0, 0.1);
   }
-  .affiliate-card:hover {
-    background: rgba(0, 0, 0, 0.07);
-    border-color: rgba(0, 0, 0, 0.15);
-  }
   .affiliate-card-title {
     color: #1e293b;
   }
   .affiliate-card-text {
     color: #475569;
+  }
+  .affiliate-card-link {
+    color: #2563eb;
+  }
+  .affiliate-card-link:hover {
+    color: #1d4ed8;
   }
 }
 
